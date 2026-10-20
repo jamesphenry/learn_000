@@ -3,6 +3,7 @@
 #include <time.h>
 #include "test-runner.h"
 #include <stdbool.h>
+#include <math.h>
 
 #include "../src/board.c"
 #include "../src/neuron.c"
@@ -176,6 +177,58 @@ static char *test_input_count_matches_the_board(void)
 	return NULL;
 }
 
+static char *test_relu(void)
+{
+	_it_should("leave a positive value unchanged",
+		nearly_equal(neuron_relu(3.5), 3.5));
+	_it_should("leave zero at zero",
+		nearly_equal(neuron_relu(0.0), 0.0));
+	_it_should("turn a negative value into zero",
+		nearly_equal(neuron_relu(-2.5), 0.0));
+
+	return NULL;
+}
+
+static char *test_relu_edges(void)
+{
+	_it_should("leave a large positive value unchanged",
+		nearly_equal(neuron_relu(1000.0), 1000.0));
+	_it_should("turn a small negative value into zero",
+		nearly_equal(neuron_relu(-0.0001), 0.0));
+	_it_should("turn negative zero into zero",
+		nearly_equal(neuron_relu(-0.0), 0.0));
+
+	/* A NaN is compared directly, a tolerance would never match it. */
+	_it_should("turn a NaN value into zero", neuron_relu(NAN) == 0.0);
+
+	return NULL;
+}
+
+/* The weighted sum feeds the activation, which is the whole neuron. */
+static char *test_relu_after_the_weighted_sum(void)
+{
+	double inputs[NEURON_INPUTS] = {-1, -1, -1, -1, -1, -1, -1, -1, -1};
+	double weights[NEURON_INPUTS] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+	double sum;
+
+	/* -1 * 9 = -9 */
+	sum = neuron_weighted_sum(inputs, weights, 0.0);
+	_it_should("turn a negative sum into zero", nearly_equal(neuron_relu(sum), 0.0));
+
+	/* one X and eight O: 1 - 8 = -7 */
+	inputs[0] = 1.0;
+	sum = neuron_weighted_sum(inputs, weights, 0.0);
+	_it_should("turn a negative sum into zero", nearly_equal(neuron_relu(sum), 0.0));
+
+	/* all X: 1 * 9 = 9 */
+	for (int i = 0; i < NEURON_INPUTS; i++)
+		inputs[i] = 1.0;
+	sum = neuron_weighted_sum(inputs, weights, 0.0);
+	_it_should("leave a positive sum unchanged", nearly_equal(neuron_relu(sum), 9.0));
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	_run_test(test_all_zero);
@@ -188,6 +241,9 @@ static char *run_tests()
 	_run_test(test_negative_weights);
 	_run_test(test_fractional_values);
 	_run_test(test_rounding);
+	_run_test(test_relu);
+	_run_test(test_relu_edges);
+	_run_test(test_relu_after_the_weighted_sum);
 	_run_test(test_board_feeds_a_neuron);
 	_run_test(test_input_count_matches_the_board);
 

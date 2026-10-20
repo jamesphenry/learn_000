@@ -16,4 +16,13 @@ double neuron_weighted_sum(const double inputs[NEURON_INPUTS],
 			    const double weights[NEURON_INPUTS],
 			    double bias);
 
+/*
+ * The activation of the neuron: a rectified linear unit.
+ *
+ *     value > 0 ? value : 0
+ *
+ * A positive value passes through unchanged, anything else becomes zero.
+ */
+double neuron_relu(double value);
+
 #endif // NEURON_H

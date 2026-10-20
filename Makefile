@@ -12,6 +12,14 @@ BIN_DIR = src
 CC ?= gcc
 CFLAGS += -I$(INC_DIR) -Wall -Wextra -Werror
 
+# Libraries to link against. The math functions in <math.h> live in libm. The
+# test runner compiles and links in a single step and puts the compiler flags
+# before the source files, and the linker only keeps a shared library that
+# resolves a symbol it has already seen, so the library is marked as needed
+# to survive that order.
+LDLIBS += -Wl,--no-as-needed -lm
+CFLAGS += $(LDLIBS)
+
 # Every .c file under src/ is a separate translation unit and is compiled and
 # linked on its own, so the project is free to grow more sources (board.c,
 # main.c, ...) without touching this file.
