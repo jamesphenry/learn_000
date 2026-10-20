@@ -80,18 +80,36 @@ run-debug: $(DEBUG_TARGET) ## Build and run debug target
 # source in the same translation unit as the test, which is what lets the
 # test override puts() to capture the greeting. A new source file therefore
 # has to be added to the test file as well.
+#
+# The runner exits successfully even when a test fails or crashes, so its
+# output is checked as well before the build is called a success.
 test: ## Run tests
-	CFLAGS="$(CFLAGS) -g -Og -I. -DTEST -pthread" sh test/test-runner/test-runner.sh $(TST)
+	@out="$$(CFLAGS="$(CFLAGS) -g -Og -I. -DTEST -pthread" sh test/test-runner/test-runner.sh $(TST) 2>&1)"; rc=$$?; \
+	echo "$$out"; \
+	if [ $$rc -ne 0 ] || echo "$$out" | grep -qE '\*\*FAIL\*\*|Segmentation fault|SIGSEGV|core dumped'; then \
+		echo "tests failed"; \
+		exit 1; \
+	fi
 .PHONY: test
 
 # Run tests with AddressSanitizer and UndefinedBehaviorSanitizer
 test-asan: ## Run tests with AddressSanitizer and UndefinedBehaviorSanitizer
-	RUNNER=command CFLAGS="$(CFLAGS) -g -Og -I. -DTEST -pthread -fsanitize=address,undefined" sh test/test-runner/test-runner.sh $(TST)
+	@out="$$(RUNNER=command CFLAGS="$(CFLAGS) -g -Og -I. -DTEST -pthread -fsanitize=address,undefined" sh test/test-runner/test-runner.sh $(TST) 2>&1)"; rc=$$?; \
+	echo "$$out"; \
+	if [ $$rc -ne 0 ] || echo "$$out" | grep -qE '\*\*FAIL\*\*|Segmentation fault|SIGSEGV|core dumped|ERROR: AddressSanitizer'; then \
+		echo "tests failed"; \
+		exit 1; \
+	fi
 .PHONY: test-asan
 
 # Run tests with fast runner (no valgrind)
 test-quick: ## Run fast tests (no Valgrind)
-	RUNNER=command CFLAGS="$(CFLAGS) -g -Og -I. -DTEST -pthread" sh test/test-runner/test-runner.sh $(TST)
+	@out="$$(RUNNER=command CFLAGS="$(CFLAGS) -g -Og -I. -DTEST -pthread" sh test/test-runner/test-runner.sh $(TST) 2>&1)"; rc=$$?; \
+	echo "$$out"; \
+	if [ $$rc -ne 0 ] || echo "$$out" | grep -qE '\*\*FAIL\*\*|Segmentation fault|SIGSEGV|core dumped'; then \
+		echo "tests failed"; \
+		exit 1; \
+	fi
 .PHONY: test-quick
 
 # Alias test
