@@ -207,24 +207,36 @@ static char *test_relu_edges(void)
 /* The weighted sum feeds the activation, which is the whole neuron. */
 static char *test_relu_after_the_weighted_sum(void)
 {
-	double inputs[NEURON_INPUTS] = {-1, -1, -1, -1, -1, -1, -1, -1, -1};
+	double inputs[NEURON_INPUTS] = {0};
 	double weights[NEURON_INPUTS] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
-	double sum;
 
-	/* -1 * 9 = -9 */
-	sum = neuron_weighted_sum(inputs, weights, 0.0);
-	_it_should("turn a negative sum into zero", nearly_equal(neuron_relu(sum), 0.0));
+	/* -1 * 1 = -1, and the activation turns a negative sum into zero */
+	inputs[0] = -1.0;
+	_it_should("turn a negative sum into zero",
+		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, 0.0)), 0.0));
 
-	/* one X and eight O: 1 - 8 = -7 */
+	/* 0 * 1 = 0, and the activation leaves a sum of zero alone */
+	inputs[0] = 0.0;
+	_it_should("leave a sum of zero at zero",
+		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, 0.0)), 0.0));
+
+	/* 1 * 1 = 1, and the activation leaves a positive sum alone */
 	inputs[0] = 1.0;
-	sum = neuron_weighted_sum(inputs, weights, 0.0);
-	_it_should("turn a negative sum into zero", nearly_equal(neuron_relu(sum), 0.0));
+	_it_should("leave a positive sum unchanged",
+		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, 0.0)), 1.0));
 
-	/* all X: 1 * 9 = 9 */
+	/* one X and eight O: 1 - 8 = -7, still a negative sum */
+	inputs[0] = 1.0;
+	for (int i = 1; i < NEURON_INPUTS; i++)
+		inputs[i] = -1.0;
+	_it_should("turn a negative sum of mixed inputs into zero",
+		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, 0.0)), 0.0));
+
+	/* nine X and a bias of -9: 9 - 9 = 0 */
 	for (int i = 0; i < NEURON_INPUTS; i++)
 		inputs[i] = 1.0;
-	sum = neuron_weighted_sum(inputs, weights, 0.0);
-	_it_should("leave a positive sum unchanged", nearly_equal(neuron_relu(sum), 9.0));
+	_it_should("leave a sum of zero at zero when the bias cancels the inputs",
+		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, -9.0)), 0.0));
 
 	return NULL;
 }
