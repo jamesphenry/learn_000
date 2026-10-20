@@ -16,8 +16,11 @@ int main(int argc, char *argv[], char *env[]) {
 	UNUSED(argv);
 	UNUSED(env);
 
+	board_t board;
+	board_init(&board);
+
 	greet("Hello, World!");
-	print_board();
+	print_board(&board);
 
 	return EXIT_SUCCESS;
 }

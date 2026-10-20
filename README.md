@@ -79,15 +79,21 @@ make clean
 ## Project Structure
 
 ```
-c-skeleton
+learn_000
 ├── include
+│   ├── board.h
 │   ├── main.h
 │   └── ...
 ├── src
+│   ├── board.c
 │   ├── main.c
 │   └── ...
 ├── test
+│   ├── board.test.c
 │   ├── main.test.c
+│   ├── thread.test.c
+│   └── ...
+├── obj
 │   └── ...
 ├── .editorconfig
 ├── .gitignore
@@ -99,8 +105,9 @@ c-skeleton
 ```
 
 - **include/**: Contains the header files (.h files).
-- **src/**: Contains the source files (.c files).
+- **src/**: Contains the source files (.c files). Each file is compiled and linked on its own, so new modules can be added without changing the Makefile.
 - **test/**: Contains the test files (.test.c files).
+- **obj/**: Contains the compiled object files, created by the build.
 - **.editorconfig**: A file to define editor coding styles (https://editorconfig.org/).
 - **.git**: Version control directory.
 - **.gitignore**: Specifies intentionally untracked files to ignore.

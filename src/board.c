@@ -1,78 +1,110 @@
 #include <stdio.h>
 #include "board.h"
 
-char current_player = 'X'; // Keeps track of whose turn it is ('X' or 'O')
-
-char board[3][3] = {
-    {'1', '2', '3'},
-    {'4', '5', '6'},
-    {'7', '8', '9'}
-};
-
-void print_board(void)
+void board_init(board_t *board)
 {
-	for (int i = 0; i < 3; i++) {
-		printf(" %c | %c | %c \n", board[i][0], board[i][1], board[i][2]);
+	board->current_player = 'X';
+
+	for (int cell = 0; cell < CELL_COUNT; cell++)
+		board->cells[cell] = VALUE_EMPTY;
+}
+
+int cell_row(board_cell_t cell)
+{
+	return (int)cell / BOARD_SIZE;
+}
+
+int cell_col(board_cell_t cell)
+{
+	return (int)cell % BOARD_SIZE;
+}
+
+cell_value_t encode_mark(char player_mark)
+{
+	if (player_mark == 'X') return VALUE_X;
+	if (player_mark == 'O') return VALUE_O;
+
+	return VALUE_EMPTY;
+}
+
+char decode_value(cell_value_t value)
+{
+	if (value == VALUE_X) return 'X';
+	if (value == VALUE_O) return 'O';
+
+	return '.';
+}
+
+void print_board(const board_t *board)
+{
+	for (int row = 0; row < BOARD_SIZE; row++) {
+		printf(" %c | %c | %c \n",
+			decode_value(board->cells[row * BOARD_SIZE + 0]),
+			decode_value(board->cells[row * BOARD_SIZE + 1]),
+			decode_value(board->cells[row * BOARD_SIZE + 2]));
 
 		// Only print the divider after the first and second rows
-		if (i < 2) {
+		if (row < 2) {
 			printf("---+---+---\n");
 		}
 	}
 }
 
-bool place_mark(int row, int col, char player_mark) {
-    if (row < 0 || row > 2 || col < 0 || col > 2) return false;
-    if (player_mark != 'X' && player_mark != 'O') return false;
-    if (board[row][col] == 'X' || board[row][col] == 'O') return false;
+bool place_mark(board_t *board, board_cell_t cell, char player_mark)
+{
+	if (cell < 0 || cell >= CELL_COUNT) return false;
+	if (player_mark != 'X' && player_mark != 'O') return false;
+	if (board->cells[cell] != VALUE_EMPTY) return false;
 
-    board[row][col] = player_mark;
-    return true;
+	board->cells[cell] = encode_mark(player_mark);
+	return true;
 }
 
-bool detect_win(char player_mark)
+static const board_cell_t win_lines[8][3] = {
+	{CELL_TOP_LEFT, CELL_TOP, CELL_TOP_RIGHT},
+	{CELL_MIDDLE_LEFT, CELL_CENTER, CELL_MIDDLE_RIGHT},
+	{CELL_BOTTOM_LEFT, CELL_BOTTOM, CELL_BOTTOM_RIGHT},
+	{CELL_TOP_LEFT, CELL_MIDDLE_LEFT, CELL_BOTTOM_LEFT},
+	{CELL_TOP, CELL_CENTER, CELL_BOTTOM},
+	{CELL_TOP_RIGHT, CELL_MIDDLE_RIGHT, CELL_BOTTOM_LEFT},
+	{CELL_TOP_LEFT, CELL_CENTER, CELL_BOTTOM_RIGHT},
+	{CELL_TOP_RIGHT, CELL_CENTER, CELL_BOTTOM_LEFT}
+};
+
+bool detect_win(const board_t *board, char player_mark)
 {
-	for (int row = 0; row < 3; row++) {
-		if (board[row][0] == player_mark && board[row][1] == player_mark &&
-		    board[row][2] == player_mark)
+	if (player_mark != 'X' && player_mark != 'O') return false;
+
+	cell_value_t value = encode_mark(player_mark);
+
+	for (int line = 0; line < 8; line++) {
+		if (board->cells[win_lines[line][0]] == value &&
+		    board->cells[win_lines[line][1]] == value &&
+		    board->cells[win_lines[line][2]] == value)
 			return true;
 	}
-
-	for (int col = 0; col < 3; col++) {
-		if (board[0][col] == player_mark && board[1][col] == player_mark &&
-		    board[2][col] == player_mark)
-			return true;
-	}
-
-	if (board[0][0] == player_mark && board[1][1] == player_mark && board[2][2] == player_mark)
-		return true;
-
-	if (board[0][2] == player_mark && board[1][1] == player_mark && board[2][0] == player_mark)
-		return true;
 
 	return false;
 }
 
-bool detect_current_win(void)
+bool detect_current_win(const board_t *board)
 {
-	return detect_win(current_player);
+	return detect_win(board, board->current_player);
 }
 
-bool board_is_full(void)
+bool board_is_full(const board_t *board)
 {
-	for (int row = 0; row < 3; row++) {
-		for (int col = 0; col < 3; col++) {
-			if (board[row][col] != 'X' && board[row][col] != 'O')
-				return false;
-		}
+	for (int cell = 0; cell < CELL_COUNT; cell++) {
+		if (board->cells[cell] == VALUE_EMPTY)
+			return false;
 	}
 
 	return true;
 }
 
-bool detect_draw(void)
+bool detect_draw(const board_t *board)
 {
-	if (!board_is_full()) return false;
+	if (!board_is_full(board)) return false;
 
-	return !detect_win('X') && !detect_win('O');
+	return !detect_win(board, 'X') && !detect_win(board, 'O');
 }
