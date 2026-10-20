@@ -16,7 +16,7 @@ INC = $(wildcard $(INC_DIR)/*.h)
 SRC = $(wildcard $(SRC_DIR)/*.c)
 TST = $(wildcard $(TST_DIR)/*.test.c)
 OBJ = $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
-TARGET = $(BIN_DIR)/c-skeleton
+TARGET = $(BIN_DIR)/learn_000
 DEBUG_TARGET = $(TARGET)-debug
 
 

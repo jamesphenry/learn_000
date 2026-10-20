@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include "test-runner.h"
+#include <stdbool.h>
 
 int _retval = 0;
 const char *_greet = NULL;
@@ -18,6 +19,11 @@ static char *test_greet(void)
 	_it_should("output greeting", s == _greet);
 
 	return NULL;
+}
+
+static char *test_board(void)
+{
+	_it_should("", TRUE, place_maek(1,1,'X'));
 }
 
 static char *run_tests()
