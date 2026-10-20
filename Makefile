@@ -3,7 +3,7 @@
 # Directories
 INC_DIR = include
 SRC_DIR = src
-OBJ_DIR = src
+OBJ_DIR = obj
 TST_DIR = test
 TMP_DIR = tmp
 BIN_DIR = src
@@ -12,6 +12,9 @@ BIN_DIR = src
 CC ?= gcc
 CFLAGS += -I$(INC_DIR) -Wall -Wextra -Werror
 
+# Every .c file under src/ is a separate translation unit and is compiled and
+# linked on its own, so the project is free to grow more sources (board.c,
+# main.c, ...) without touching this file.
 INC = $(wildcard $(INC_DIR)/*.h)
 SRC = $(wildcard $(SRC_DIR)/*.c)
 TST = $(wildcard $(TST_DIR)/*.test.c)
@@ -25,9 +28,9 @@ all: $(TARGET) ## Build default target
 .PHONY: all
 
 
-# Create obj directory if it doesn't exist
-@$(OBJ_DIR) $(BIN_DIR) $(TMP_DIR):
-	mkdir -p $@
+# Create obj, bin and tmp directories if they don't exist
+$(OBJ_DIR) $(BIN_DIR) $(TMP_DIR):
+	@mkdir -p $@
 
 # Rule to build the target executable
 $(TARGET): $(OBJ) | $(BIN_DIR)
@@ -63,6 +66,12 @@ run-debug: $(DEBUG_TARGET) ## Build and run debug target
 
 
 # Run tests
+#
+# The test files are compiled on their own, without $(OBJ), and pull the
+# sources in with #include instead (see test/main.test.c). That keeps every
+# source in the same translation unit as the test, which is what lets the
+# test override puts() to capture the greeting. A new source file therefore
+# has to be added to the test file as well.
 test: ## Run tests
 	CFLAGS="$(CFLAGS) -g -Og -I. -DTEST" sh test/test-runner/test-runner.sh $(TST)
 .PHONY: test
@@ -106,7 +115,8 @@ strip: $(TARGET) ## Strip symbols from target
 
 # Clean target
 clean: ## Clean compiled files
-	rm -f $(OBJ) $(TARGET)
+	rm -rf $(OBJ_DIR)
+	rm -f $(TARGET) $(DEBUG_TARGET)
 .PHONY: clean
 
 

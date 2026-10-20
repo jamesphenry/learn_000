@@ -54,7 +54,10 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
+# Object directory
+/obj/
+
 # Binary
-c-skeleton
-c-skeleton-debug
+learn_000
+learn_000-debug
 

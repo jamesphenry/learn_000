@@ -9,6 +9,7 @@ int _retval = 0;
 const char *_greet = NULL;
 #define puts(s) (_greet = (s), _retval)
 
+#include "../src/board.c"
 #include "../src/main.c"
 
 static char *test_greet(void)
