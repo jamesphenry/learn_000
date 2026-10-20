@@ -52,6 +52,12 @@ To run all tests:
 make test
 ```
 
+To run the tests with AddressSanitizer and UndefinedBehaviorSanitizer:
+
+```sh
+make test-asan
+```
+
 To run a specific test:
 
 ```sh

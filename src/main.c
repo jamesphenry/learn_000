@@ -30,6 +30,7 @@ void print_board()
 
 bool place_mark(int row, int col, char player_mark) {
     if (row < 0 || row > 2 || col < 0 || col > 2) return false;
+    if (player_mark != 'X' && player_mark != 'O') return false;
     if (board[row][col] == 'X' || board[row][col] == 'O') return false;
 
     board[row][col] = player_mark;

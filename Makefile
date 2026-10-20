@@ -67,6 +67,11 @@ test: ## Run tests
 	CFLAGS="$(CFLAGS) -g -Og -I. -DTEST" sh test/test-runner/test-runner.sh $(TST)
 .PHONY: test
 
+# Run tests with AddressSanitizer and UndefinedBehaviorSanitizer
+test-asan: ## Run tests with AddressSanitizer and UndefinedBehaviorSanitizer
+	RUNNER=command CFLAGS="$(CFLAGS) -g -Og -I. -DTEST -fsanitize=address,undefined" sh test/test-runner/test-runner.sh $(TST)
+.PHONY: test-asan
+
 # Run tests with fast runner (no valgrind)
 test-quick: ## Run fast tests (no Valgrind)
 	RUNNER=command CFLAGS="$(CFLAGS) -g -Og -I. -DTEST" sh test/test-runner/test-runner.sh $(TST)
