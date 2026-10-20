@@ -82,16 +82,19 @@ make clean
 learn_000
 ├── include
 │   ├── board.h
+│   ├── layer.h
 │   ├── main.h
 │   ├── neuron.h
 │   └── ...
 ├── src
 │   ├── board.c
+│   ├── layer.c
 │   ├── main.c
 │   ├── neuron.c
 │   └── ...
 ├── test
 │   ├── board.test.c
+│   ├── layer.test.c
 │   ├── main.test.c
 │   ├── neuron.test.c
 │   ├── thread.test.c

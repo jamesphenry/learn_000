@@ -19,120 +19,120 @@ static bool nearly_equal(double actual, double expected)
 
 static char *test_all_zero(void)
 {
-	double inputs[NEURON_INPUTS] = {0};
-	double weights[NEURON_INPUTS] = {0};
+	double inputs[CELL_COUNT] = {0};
+	double weights[CELL_COUNT] = {0};
 
 	_it_should("return zero for zero inputs and zero weights",
-		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 0.0));
+		nearly_equal(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0), 0.0));
 
 	return NULL;
 }
 
 static char *test_zero_inputs_with_bias(void)
 {
-	double inputs[NEURON_INPUTS] = {0};
-	double weights[NEURON_INPUTS] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+	double inputs[CELL_COUNT] = {0};
+	double weights[CELL_COUNT] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
 
 	_it_should("return the bias when every input is zero",
-		nearly_equal(neuron_weighted_sum(inputs, weights, 3.5), 3.5));
+		nearly_equal(neuron_weighted_sum(inputs, weights, CELL_COUNT, 3.5), 3.5));
 	_it_should("return a negative bias when every input is zero",
-		nearly_equal(neuron_weighted_sum(inputs, weights, -2.5), -2.5));
+		nearly_equal(neuron_weighted_sum(inputs, weights, CELL_COUNT, -2.5), -2.5));
 
 	return NULL;
 }
 
 static char *test_all_weights_one(void)
 {
-	double inputs[NEURON_INPUTS] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
-	double weights[NEURON_INPUTS] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+	double inputs[CELL_COUNT] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+	double weights[CELL_COUNT] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
 
 	/* 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 = 45 */
 	_it_should("add up the inputs when every weight is one",
-		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 45.0));
+		nearly_equal(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0), 45.0));
 	_it_should("add the bias to the sum of the inputs",
-		nearly_equal(neuron_weighted_sum(inputs, weights, 10.0), 55.0));
+		nearly_equal(neuron_weighted_sum(inputs, weights, CELL_COUNT, 10.0), 55.0));
 
 	return NULL;
 }
 
 static char *test_weights_are_applied(void)
 {
-	double inputs[NEURON_INPUTS] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
-	double weights[NEURON_INPUTS] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+	double inputs[CELL_COUNT] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+	double weights[CELL_COUNT] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 
 	/* 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 = 45 */
 	_it_should("weight each input by its own weight",
-		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 45.0));
+		nearly_equal(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0), 45.0));
 
 	return NULL;
 }
 
 static char *test_single_weight(void)
 {
-	double inputs[NEURON_INPUTS] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
-	double weights[NEURON_INPUTS] = {2, 0, 0, 0, 0, 0, 0, 0, 0};
+	double inputs[CELL_COUNT] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+	double weights[CELL_COUNT] = {2, 0, 0, 0, 0, 0, 0, 0, 0};
 
 	_it_should("ignore the inputs whose weight is zero",
-		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 2.0));
+		nearly_equal(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0), 2.0));
 
 	return NULL;
 }
 
 static char *test_negative_inputs(void)
 {
-	double inputs[NEURON_INPUTS] = {-1, 1, -1, 1, -1, 1, -1, 1, -1};
-	double weights[NEURON_INPUTS] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+	double inputs[CELL_COUNT] = {-1, 1, -1, 1, -1, 1, -1, 1, -1};
+	double weights[CELL_COUNT] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
 
 	/* -1 + 1 - 1 + 1 - 1 + 1 - 1 + 1 - 1 = -1 */
 	_it_should("add up inputs that are negative",
-		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), -1.0));
+		nearly_equal(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0), -1.0));
 
 	return NULL;
 }
 
 static char *test_negative_inputs_and_weights(void)
 {
-	double inputs[NEURON_INPUTS] = {-3, -2, -1, 0, 1, 2, 3, 4, 5};
-	double weights[NEURON_INPUTS] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+	double inputs[CELL_COUNT] = {-3, -2, -1, 0, 1, 2, 3, 4, 5};
+	double weights[CELL_COUNT] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
 
 	/* -3 - 2 - 1 + 0 + 1 + 2 + 3 + 4 + 5 = 9 */
 	_it_should("add up inputs that are negative",
-		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 9.0));
+		nearly_equal(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0), 9.0));
 
 	return NULL;
 }
 
 static char *test_negative_weights(void)
 {
-	double inputs[NEURON_INPUTS] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
-	double weights[NEURON_INPUTS] = {1, -1, 1, -1, 1, -1, 1, -1, 1};
+	double inputs[CELL_COUNT] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+	double weights[CELL_COUNT] = {1, -1, 1, -1, 1, -1, 1, -1, 1};
 
 	/* 1 - 2 + 3 - 4 + 5 - 6 + 7 - 8 + 9 = 5 */
 	_it_should("apply weights that are negative",
-		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 5.0));
+		nearly_equal(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0), 5.0));
 
 	return NULL;
 }
 
 static char *test_fractional_values(void)
 {
-	double inputs[NEURON_INPUTS] = {0.5, 0.25, 0, 0, 0, 0, 0, 0, 0};
-	double weights[NEURON_INPUTS] = {2, 4, 0, 0, 0, 0, 0, 0, 0};
+	double inputs[CELL_COUNT] = {0.5, 0.25, 0, 0, 0, 0, 0, 0, 0};
+	double weights[CELL_COUNT] = {2, 4, 0, 0, 0, 0, 0, 0, 0};
 
 	/* 0.5 * 2 + 0.25 * 4 = 1 + 1 = 2 */
 	_it_should("multiply fractional inputs by their weights",
-		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 2.0));
+		nearly_equal(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0), 2.0));
 
 	return NULL;
 }
 
 static char *test_rounding(void)
 {
-	double inputs[NEURON_INPUTS] = {0.1, 0.2, 0, 0, 0, 0, 0, 0, 0};
-	double weights[NEURON_INPUTS] = {1, 1, 0, 0, 0, 0, 0, 0, 0};
+	double inputs[CELL_COUNT] = {0.1, 0.2, 0, 0, 0, 0, 0, 0, 0};
+	double weights[CELL_COUNT] = {1, 1, 0, 0, 0, 0, 0, 0, 0};
 
 	_it_should("stay close to the expected sum when the inputs do not divide evenly",
-		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 0.3));
+		nearly_equal(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0), 0.3));
 
 	return NULL;
 }
@@ -141,8 +141,8 @@ static char *test_rounding(void)
 static char *test_board_feeds_a_neuron(void)
 {
 	board_t board;
-	double inputs[NEURON_INPUTS];
-	double weights[NEURON_INPUTS] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+	double inputs[CELL_COUNT];
+	double weights[CELL_COUNT] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
 
 	board_init(&board);
 	place_mark(&board, CELL_TOP_LEFT, 'X');
@@ -153,7 +153,7 @@ static char *test_board_feeds_a_neuron(void)
 
 	/* +1 from the X and -1 from the O cancel out */
 	_it_should("take the cells of a board as inputs",
-		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 0.0));
+		nearly_equal(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0), 0.0));
 
 	board_init(&board);
 	place_mark(&board, CELL_TOP_LEFT, 'X');
@@ -165,14 +165,14 @@ static char *test_board_feeds_a_neuron(void)
 
 	/* three X on the top row, so the sum is 3 */
 	_it_should("sum the marks of a board",
-		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 3.0));
+		nearly_equal(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0), 3.0));
 
 	return NULL;
 }
 
 static char *test_input_count_matches_the_board(void)
 {
-	_it_should("take one input per cell on the board", NEURON_INPUTS == CELL_COUNT);
+	_it_should("take one input per cell on the board", CELL_COUNT == CELL_COUNT);
 
 	return NULL;
 }
@@ -207,36 +207,36 @@ static char *test_relu_edges(void)
 /* The weighted sum feeds the activation, which is the whole neuron. */
 static char *test_relu_after_the_weighted_sum(void)
 {
-	double inputs[NEURON_INPUTS] = {0};
-	double weights[NEURON_INPUTS] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+	double inputs[CELL_COUNT] = {0};
+	double weights[CELL_COUNT] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
 
 	/* -1 * 1 = -1, and the activation turns a negative sum into zero */
 	inputs[0] = -1.0;
 	_it_should("turn a negative sum into zero",
-		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, 0.0)), 0.0));
+		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0)), 0.0));
 
 	/* 0 * 1 = 0, and the activation leaves a sum of zero alone */
 	inputs[0] = 0.0;
 	_it_should("leave a sum of zero at zero",
-		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, 0.0)), 0.0));
+		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0)), 0.0));
 
 	/* 1 * 1 = 1, and the activation leaves a positive sum alone */
 	inputs[0] = 1.0;
 	_it_should("leave a positive sum unchanged",
-		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, 0.0)), 1.0));
+		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0)), 1.0));
 
 	/* one X and eight O: 1 - 8 = -7, still a negative sum */
 	inputs[0] = 1.0;
-	for (int i = 1; i < NEURON_INPUTS; i++)
+	for (int i = 1; i < CELL_COUNT; i++)
 		inputs[i] = -1.0;
 	_it_should("turn a negative sum of mixed inputs into zero",
-		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, 0.0)), 0.0));
+		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0)), 0.0));
 
 	/* nine X and a bias of -9: 9 - 9 = 0 */
-	for (int i = 0; i < NEURON_INPUTS; i++)
+	for (int i = 0; i < CELL_COUNT; i++)
 		inputs[i] = 1.0;
 	_it_should("leave a sum of zero at zero when the bias cancels the inputs",
-		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, -9.0)), 0.0));
+		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, CELL_COUNT, -9.0)), 0.0));
 
 	return NULL;
 }

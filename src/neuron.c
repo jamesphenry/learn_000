@@ -1,13 +1,12 @@
 #include <math.h>
 #include "neuron.h"
 
-double neuron_weighted_sum(const double inputs[NEURON_INPUTS],
-			    const double weights[NEURON_INPUTS],
-			    double bias)
+double neuron_weighted_sum(const double *inputs, const double *weights,
+			    int count, double bias)
 {
 	double sum = 0.0;
 
-	for (int i = 0; i < NEURON_INPUTS; i++)
+	for (int i = 0; i < count; i++)
 		sum += inputs[i] * weights[i];
 
 	return sum + bias;
