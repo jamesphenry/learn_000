@@ -37,6 +37,53 @@ bool place_mark(int row, int col, char player_mark) {
     return true;
 }
 
+bool detect_win(char player_mark)
+{
+	for (int row = 0; row < 3; row++) {
+		if (board[row][0] == player_mark && board[row][1] == player_mark &&
+		    board[row][2] == player_mark)
+			return true;
+	}
+
+	for (int col = 0; col < 3; col++) {
+		if (board[0][col] == player_mark && board[1][col] == player_mark &&
+		    board[2][col] == player_mark)
+			return true;
+	}
+
+	if (board[0][0] == player_mark && board[1][1] == player_mark && board[2][2] == player_mark)
+		return true;
+
+	if (board[0][2] == player_mark && board[1][1] == player_mark && board[2][0] == player_mark)
+		return true;
+
+	return false;
+}
+
+bool detect_current_win(void)
+{
+	return detect_win(current_player);
+}
+
+bool board_is_full(void)
+{
+	for (int row = 0; row < 3; row++) {
+		for (int col = 0; col < 3; col++) {
+			if (board[row][col] != 'X' && board[row][col] != 'O')
+				return false;
+		}
+	}
+
+	return true;
+}
+
+bool detect_draw(void)
+{
+	if (!board_is_full()) return false;
+
+	return !detect_win('X') && !detect_win('O');
+}
+
 #ifndef TEST
 #define UNUSED(x) (void)(x)
 
