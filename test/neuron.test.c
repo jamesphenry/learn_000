@@ -1,0 +1,195 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include "test-runner.h"
+#include <stdbool.h>
+
+#include "../src/board.c"
+#include "../src/neuron.c"
+
+/* Floats are compared with a tolerance, so hand written expectations are not
+ * thrown off by the last bit of a rounding error. */
+static bool nearly_equal(double actual, double expected)
+{
+	double diff = actual > expected ? actual - expected : expected - actual;
+
+	return diff < 1e-9;
+}
+
+static char *test_all_zero(void)
+{
+	double inputs[NEURON_INPUTS] = {0};
+	double weights[NEURON_INPUTS] = {0};
+
+	_it_should("return zero for zero inputs and zero weights",
+		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 0.0));
+
+	return NULL;
+}
+
+static char *test_zero_inputs_with_bias(void)
+{
+	double inputs[NEURON_INPUTS] = {0};
+	double weights[NEURON_INPUTS] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+
+	_it_should("return the bias when every input is zero",
+		nearly_equal(neuron_weighted_sum(inputs, weights, 3.5), 3.5));
+	_it_should("return a negative bias when every input is zero",
+		nearly_equal(neuron_weighted_sum(inputs, weights, -2.5), -2.5));
+
+	return NULL;
+}
+
+static char *test_all_weights_one(void)
+{
+	double inputs[NEURON_INPUTS] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+	double weights[NEURON_INPUTS] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+
+	/* 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 = 45 */
+	_it_should("add up the inputs when every weight is one",
+		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 45.0));
+	_it_should("add the bias to the sum of the inputs",
+		nearly_equal(neuron_weighted_sum(inputs, weights, 10.0), 55.0));
+
+	return NULL;
+}
+
+static char *test_weights_are_applied(void)
+{
+	double inputs[NEURON_INPUTS] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+	double weights[NEURON_INPUTS] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+	/* 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 = 45 */
+	_it_should("weight each input by its own weight",
+		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 45.0));
+
+	return NULL;
+}
+
+static char *test_single_weight(void)
+{
+	double inputs[NEURON_INPUTS] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+	double weights[NEURON_INPUTS] = {2, 0, 0, 0, 0, 0, 0, 0, 0};
+
+	_it_should("ignore the inputs whose weight is zero",
+		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 2.0));
+
+	return NULL;
+}
+
+static char *test_negative_inputs(void)
+{
+	double inputs[NEURON_INPUTS] = {-1, 1, -1, 1, -1, 1, -1, 1, -1};
+	double weights[NEURON_INPUTS] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+
+	/* -1 + 1 - 1 + 1 - 1 + 1 - 1 + 1 - 1 = -1 */
+	_it_should("add up inputs that are negative",
+		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), -1.0));
+
+	return NULL;
+}
+
+static char *test_negative_inputs_and_weights(void)
+{
+	double inputs[NEURON_INPUTS] = {-3, -2, -1, 0, 1, 2, 3, 4, 5};
+	double weights[NEURON_INPUTS] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+
+	/* -3 - 2 - 1 + 0 + 1 + 2 + 3 + 4 + 5 = 9 */
+	_it_should("add up inputs that are negative",
+		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 9.0));
+
+	return NULL;
+}
+
+static char *test_negative_weights(void)
+{
+	double inputs[NEURON_INPUTS] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+	double weights[NEURON_INPUTS] = {1, -1, 1, -1, 1, -1, 1, -1, 1};
+
+	/* 1 - 2 + 3 - 4 + 5 - 6 + 7 - 8 + 9 = 5 */
+	_it_should("apply weights that are negative",
+		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 5.0));
+
+	return NULL;
+}
+
+static char *test_fractional_values(void)
+{
+	double inputs[NEURON_INPUTS] = {0.5, 0.25, 0, 0, 0, 0, 0, 0, 0};
+	double weights[NEURON_INPUTS] = {2, 4, 0, 0, 0, 0, 0, 0, 0};
+
+	/* 0.5 * 2 + 0.25 * 4 = 1 + 1 = 2 */
+	_it_should("multiply fractional inputs by their weights",
+		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 2.0));
+
+	return NULL;
+}
+
+static char *test_rounding(void)
+{
+	double inputs[NEURON_INPUTS] = {0.1, 0.2, 0, 0, 0, 0, 0, 0, 0};
+	double weights[NEURON_INPUTS] = {1, 1, 0, 0, 0, 0, 0, 0, 0};
+
+	_it_should("stay close to the expected sum when the inputs do not divide evenly",
+		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 0.3));
+
+	return NULL;
+}
+
+/* The board feeds a neuron directly: the cells are already numbers. */
+static char *test_board_feeds_a_neuron(void)
+{
+	board_t board;
+	double inputs[NEURON_INPUTS];
+	double weights[NEURON_INPUTS] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+
+	board_init(&board);
+	place_mark(&board, CELL_TOP_LEFT, 'X');
+	place_mark(&board, CELL_TOP, 'O');
+
+	for (int cell = 0; cell < CELL_COUNT; cell++)
+		inputs[cell] = (double)board.cells[cell];
+
+	/* +1 from the X and -1 from the O cancel out */
+	_it_should("take the cells of a board as inputs",
+		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 0.0));
+
+	board_init(&board);
+	place_mark(&board, CELL_TOP_LEFT, 'X');
+	place_mark(&board, CELL_TOP, 'X');
+	place_mark(&board, CELL_TOP_RIGHT, 'X');
+
+	for (int cell = 0; cell < CELL_COUNT; cell++)
+		inputs[cell] = (double)board.cells[cell];
+
+	/* three X on the top row, so the sum is 3 */
+	_it_should("sum the marks of a board",
+		nearly_equal(neuron_weighted_sum(inputs, weights, 0.0), 3.0));
+
+	return NULL;
+}
+
+static char *test_input_count_matches_the_board(void)
+{
+	_it_should("take one input per cell on the board", NEURON_INPUTS == CELL_COUNT);
+
+	return NULL;
+}
+
+static char *run_tests()
+{
+	_run_test(test_all_zero);
+	_run_test(test_zero_inputs_with_bias);
+	_run_test(test_all_weights_one);
+	_run_test(test_weights_are_applied);
+	_run_test(test_single_weight);
+	_run_test(test_negative_inputs);
+	_run_test(test_negative_inputs_and_weights);
+	_run_test(test_negative_weights);
+	_run_test(test_fractional_values);
+	_run_test(test_rounding);
+	_run_test(test_board_feeds_a_neuron);
+	_run_test(test_input_count_matches_the_board);
+
+	return NULL;
+}

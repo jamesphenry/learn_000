@@ -83,14 +83,17 @@ learn_000
 ├── include
 │   ├── board.h
 │   ├── main.h
+│   ├── neuron.h
 │   └── ...
 ├── src
 │   ├── board.c
 │   ├── main.c
+│   ├── neuron.c
 │   └── ...
 ├── test
 │   ├── board.test.c
 │   ├── main.test.c
+│   ├── neuron.test.c
 │   ├── thread.test.c
 │   └── ...
 ├── obj
