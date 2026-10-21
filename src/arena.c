@@ -650,6 +650,8 @@ bool arena_survey(const arena_settings_t *settings, const game_t *game,
 			int other;
 
 			/* how the model did against the perfect player */
+			survey->perfect_wins[scheme] +=
+				survey->reports[run].results[scheme].perfect_after.wins;
 			survey->perfect_draws[scheme] +=
 				survey->reports[run].results[scheme].perfect_after.draws;
 			survey->perfect_losses[scheme] +=

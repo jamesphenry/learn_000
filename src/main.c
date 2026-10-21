@@ -420,10 +420,11 @@ static void run_the_arena(const game_t *game, const oracle_t *oracle)
 
 		printf("  %-8s won the round robin %d times out of %d;  it won %d and"
 		       " lost %d games against the other models;  against the perfect"
-		       " player it drew %d and lost %d\n",
+		       " player it won %d, drew %d and lost %d\n",
 		       names[scheme], survey.round_robin_wins[scheme], survey.runs,
 		       survey.games_won[scheme], survey.games_lost[scheme],
-		       survey.perfect_draws[scheme], survey.perfect_losses[scheme]);
+		       survey.perfect_wins[scheme], survey.perfect_draws[scheme],
+		       survey.perfect_losses[scheme]);
 
 		printf("           it gave away %.3f a move against a player that plays"
 		       " at random, and %.3f in the games it plays against itself\n",

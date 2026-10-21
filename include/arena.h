@@ -101,8 +101,9 @@ typedef struct {
 	int games_won[ARENA_SCHEMES];
 	int games_lost[ARENA_SCHEMES];
 
-	/* and the games each model drew and lost against the perfect player,
-	 * over all the runs */
+	/* and the games each model won, drew and lost against the perfect
+	 * player, over all the runs */
+	int perfect_wins[ARENA_SCHEMES];
 	int perfect_draws[ARENA_SCHEMES];
 	int perfect_losses[ARENA_SCHEMES];
 } arena_survey_t;
