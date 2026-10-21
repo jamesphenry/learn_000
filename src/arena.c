@@ -125,6 +125,34 @@ static void arena_result_of(const arena_look_t *before, const arena_look_t *afte
 }
 
 /*
+ * Teaches a model the way the settings say, and says how many games it
+ * learned from.
+ *
+ * The perfect player teaches it, when the settings say so; otherwise it
+ * learns from the result of the games it plays against itself.
+ */
+static bool arena_teach(const arena_settings_t *settings, const game_t *game,
+                        const oracle_t *oracle, network_t *network, int *trained)
+{
+	policy_t policy;
+	trainer_t trainer;
+	int learned = 0;
+
+	trainer_init(&trainer, network, settings->learning_rate);
+	policy_init(&policy, game, network, settings->training_seed, settings->temperature);
+
+	if (settings->learning == ARENA_LEARN_TRUTH)
+		learned = arena_learn_from_the_truth(&trainer, game, oracle, &policy,
+		                                    settings->training_games);
+	else
+		learned = trainer_run(&trainer, game, &policy, settings->training_games);
+
+	if (trained != NULL) *trained = learned;
+
+	return true;
+}
+
+/*
  * Builds one model, measures it, teaches it, and measures it again. The
  * games it learns from and the games it is measured with are apart from one
  * another, so the measurement is on games the model has not seen.
@@ -133,11 +161,9 @@ static bool arena_train_one(const arena_settings_t *settings, const game_t *game
                              const oracle_t *oracle, init_scheme_t scheme,
                              rng_t *rng, network_t *network, arena_result_t *result)
 {
-	policy_t policy;
-	trainer_t trainer;
 	arena_look_t before;
 	arena_look_t after;
-	int trained;
+	int trained = 0;
 
 	if (!arena_build(game, network, settings, scheme, rng)) return false;
 
@@ -146,14 +172,7 @@ static bool arena_train_one(const arena_settings_t *settings, const game_t *game
 	evaluate_initialisation(game, network, &result->initialisation);
 
 	/* and then it learns */
-	trainer_init(&trainer, network, settings->learning_rate);
-	policy_init(&policy, game, network, settings->training_seed, settings->temperature);
-
-	if (settings->learning == ARENA_LEARN_TRUTH)
-		trained = arena_learn_from_the_truth(&trainer, game, oracle, &policy,
-		                                    settings->training_games);
-	else
-		trained = trainer_run(&trainer, game, &policy, settings->training_games);
+	if (!arena_teach(settings, game, oracle, network, &trained)) return false;
 
 	/* and what it is like afterwards, on games it has not seen */
 	arena_measure(settings, game, oracle, network, &after);
@@ -161,6 +180,19 @@ static bool arena_train_one(const arena_settings_t *settings, const game_t *game
 	arena_result_of(&before, &after, trained, result);
 
 	return true;
+}
+
+bool arena_train(const arena_settings_t *settings, const game_t *game,
+                 const oracle_t *oracle, init_scheme_t scheme, rng_t *rng,
+                 network_t *network, int *trained)
+{
+	if (settings == NULL || game == NULL || oracle == NULL || network == NULL) return false;
+	if (rng == NULL) return false;
+	if (settings->training_games < 0 || settings->hidden_neurons < 1) return false;
+
+	if (!arena_build(game, network, settings, scheme, rng)) return false;
+
+	return arena_teach(settings, game, oracle, network, trained);
 }
 
 bool arena_run(const arena_settings_t *settings, const game_t *game,

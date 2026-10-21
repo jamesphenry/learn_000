@@ -132,6 +132,34 @@ static char *test_the_same_run_gives_the_same_result(void)
 	return NULL;
 }
 
+static char *test_the_arena_teaches_a_model_and_hands_it_back(void)
+{
+	arena_settings_t settings;
+	network_t network;
+	rng_t rng;
+	int trained = 0;
+
+	build_small_settings(&settings);
+
+	rng_seed(&rng, settings.training_seed);
+
+	_it_should("teach the model",
+		arena_train(&settings, &game, &oracle, INIT_RANDOM, &rng, &network, &trained));
+	_it_should("say how many games it learned from", trained == settings.training_games);
+	_it_should("hand back a network of the right shape",
+		network_input_size(&network) == game.n_features &&
+		network_output_size(&network) == 1);
+
+	_it_should("refuse no settings",
+		!arena_train(NULL, &game, &oracle, INIT_RANDOM, &rng, &network, &trained));
+	_it_should("refuse no generator",
+		!arena_train(&settings, &game, &oracle, INIT_RANDOM, NULL, &network, &trained));
+	_it_should("refuse nowhere to put the model",
+		!arena_train(&settings, &game, &oracle, INIT_RANDOM, &rng, NULL, &trained));
+
+	return NULL;
+}
+
 static char *test_the_way_a_model_starts_off_matters(void)
 {
 	arena_settings_t settings;
@@ -797,6 +825,7 @@ static char *run_tests()
 	_run_test(test_a_run_reports_a_result);
 	_run_test(test_the_same_run_gives_the_same_result);
 	_run_test(test_the_way_a_model_starts_off_matters);
+	_run_test(test_the_arena_teaches_a_model_and_hands_it_back);
 	_run_test(test_a_model_that_learns_gets_better);
 	_run_test(test_a_run_says_what_the_model_gave_away);
 	_run_test(test_the_perfect_player_teaches_better_than_its_own_games);

@@ -120,6 +120,17 @@ bool arena_run(const arena_settings_t *settings, const game_t *game,
                const oracle_t *oracle, init_scheme_t scheme, arena_result_t *result);
 
 /*
+ * Builds a model, teaches it the way the settings say, and hands it back so
+ * that it can be measured afterwards. It says how many games it learned from.
+ *
+ * The generator fills the model in, so that a caller that wants several
+ * models to start off differently can use one generator for all of them.
+ */
+bool arena_train(const arena_settings_t *settings, const game_t *game,
+                 const oracle_t *oracle, init_scheme_t scheme, rng_t *rng,
+                 network_t *network, int *trained);
+
+/*
  * Builds all three models, gives them the same conditions, measures each of
  * them, and then has them play each other.
  */
