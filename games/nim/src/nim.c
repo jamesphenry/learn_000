@@ -96,12 +96,58 @@ static bool nim_play(game_position_t *position, game_move_t move)
  * given to the model in the same range, and a model that is given numbers of
  * very different sizes is not the same experiment twice.
  */
-static void nim_features(const game_position_t *position, double *out)
+static void nim_features_sizes(const game_position_t *position, double *out)
 {
 	const nim_t *nim = nim_state_of(position);
 
 	for (int heap = 0; heap < NIM_HEAPS; heap++)
 		out[heap] = (double)nim->heaps[heap] / (double)NIM_MAX_HEAP;
+}
+
+/*
+ * The same three sizes, over the biggest heap there really is. The heaps
+ * never grow past the ones the game starts with, so the range of the features
+ * is a fifth of what it was.
+ */
+static void nim_features_real_range(const game_position_t *position, double *out)
+{
+	const nim_t *nim = nim_state_of(position);
+
+	for (int heap = 0; heap < NIM_HEAPS; heap++)
+		out[heap] = (double)nim->heaps[heap] / (double)NIM_REAL_MAX_HEAP;
+}
+
+/*
+ * The nine bits of the three sizes, one for each bit of each heap. The bits
+ * are either in a heap or they are not, so every number the model is given
+ * is a nought or a one.
+ */
+static void nim_features_bits(const game_position_t *position, double *out)
+{
+	const nim_t *nim = nim_state_of(position);
+
+	for (int heap = 0; heap < NIM_HEAPS; heap++)
+		for (int bit = 0; bit < NIM_BITS; bit++)
+			out[heap * NIM_BITS + bit] = (double)((nim->heaps[heap] >> bit) & 1);
+}
+
+/*
+ * The three bit counts: how many of the three heaps have each bit in them.
+ * The exclusive or of the heaps is zero exactly when every one of the counts
+ * is even, so these three numbers carry the whole of the rule of the game.
+ */
+static void nim_features_counts(const game_position_t *position, double *out)
+{
+	const nim_t *nim = nim_state_of(position);
+
+	for (int bit = 0; bit < NIM_BITS; bit++) {
+		int count = 0;
+
+		for (int heap = 0; heap < NIM_HEAPS; heap++)
+			count += (nim->heaps[heap] >> bit) & 1;
+
+		out[bit] = (double)count / (double)NIM_HEAPS;
+	}
 }
 
 static int nim_to_move(const game_position_t *position)
@@ -181,21 +227,47 @@ static int nim_positions(game_position_t *out, int wanted)
 	return count;
 }
 
-void nim_game(game_t *game)
+void nim_game_with_features(game_t *game, nim_features_t features)
 {
 	if (game == NULL) return;
 
 	game_init(game);
 
-	game->n_features = NIM_HEAPS;
 	game->start = nim_start;
 	game->play = nim_play;
-	game->features = nim_features;
 	game->over = nim_over;
 	game->to_move = nim_to_move;
 	game->outcome = nim_outcome;
 	game->samples = nim_samples;
 	game->positions = nim_positions;
+
+	switch (features) {
+	case NIM_FEATURES_REAL_RANGE:
+		game->n_features = NIM_HEAPS;
+		game->features = nim_features_real_range;
+		break;
+
+	case NIM_FEATURES_BITS:
+		game->n_features = NIM_HEAPS * NIM_BITS;
+		game->features = nim_features_bits;
+		break;
+
+	case NIM_FEATURES_COUNTS:
+		game->n_features = NIM_BITS;
+		game->features = nim_features_counts;
+		break;
+
+	case NIM_FEATURES_SIZES:
+	default:
+		game->n_features = NIM_HEAPS;
+		game->features = nim_features_sizes;
+		break;
+	}
+}
+
+void nim_game(game_t *game)
+{
+	nim_game_with_features(game, NIM_FEATURES_SIZES);
 }
 
 /*

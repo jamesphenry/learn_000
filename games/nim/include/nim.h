@@ -17,6 +17,13 @@
 #define NIM_MAX_POSITIONS ((NIM_START_HEAP_0 + 1) * (NIM_START_HEAP_1 + 1) * \
 			    (NIM_START_HEAP_2 + 1))
 
+/* How many bits a heap is written in: the biggest heap there is is seven. */
+#define NIM_BITS 3
+
+/* The biggest heap there really is: the game starts with heaps of three, four
+ * and five, and a heap only ever gets smaller. */
+#define NIM_REAL_MAX_HEAP NIM_START_HEAP_2
+
 /*
  * A move takes stones from one heap: it says which heap, and how many
  * stones to take from it.
@@ -47,12 +54,33 @@ int nim_count_of(game_move_t move);
 int nim_sum(const nim_t *nim);
 
 /*
+ * The ways the heaps may be given to a model. They are the same game and the
+ * same perfect player; only the numbers the model is given are different.
+ */
+typedef enum {
+	/* the three sizes, as a fraction of the biggest heap the game allows */
+	NIM_FEATURES_SIZES,
+	/* the three sizes, as a fraction of the biggest heap there really is */
+	NIM_FEATURES_REAL_RANGE,
+	/* the nine bits of the three sizes */
+	NIM_FEATURES_BITS,
+	/* the three bit counts: how many of the heaps have each bit in them */
+	NIM_FEATURES_COUNTS
+} nim_features_t;
+
+/*
  * The game of Nim, as the framework sees it.
  *
  * The heaps live in the state of a position, and the perfect player is the
  * one that plays the game perfectly and knows what every position is worth.
  */
 void nim_game(game_t *game);
+
+/*
+ * The same game, with the heaps given to the model in another way.
+ */
+void nim_game_with_features(game_t *game, nim_features_t features);
+
 void nim_oracle(oracle_t *oracle);
 
 #endif // NIM_H

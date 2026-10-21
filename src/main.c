@@ -754,6 +754,163 @@ static void show_the_curve_of_learning(const game_t *game, const oracle_t *oracl
 }
 
 /*
+ * How many numbers a model has to learn.
+ */
+static int count_the_parameters(int width, int hidden)
+{
+	network_t network;
+	int total = 0;
+
+	network_init(&network);
+	network_add_layer(&network, width, hidden, ACTIVATION_RELU);
+	network_add_layer(&network, hidden, 1, ACTIVATION_SIGMOID);
+
+	for (int layer = 0; layer < network.n_layers; layer++)
+		total += network.layers[layer].n_neurons * network.layers[layer].n_inputs
+		       + network.layers[layer].n_neurons;
+
+	return total;
+}
+
+/*
+ * The representation: the same architecture, the same number of games, the
+ * same seeds and the same measurement, and only the numbers the model is
+ * given are changed.
+ */
+static void show_the_representation(const oracle_t *oracle)
+{
+	const nim_features_t variants[] = {
+		NIM_FEATURES_SIZES,
+		NIM_FEATURES_COUNTS,
+		NIM_FEATURES_BITS,
+		NIM_FEATURES_REAL_RANGE
+	};
+	const char *names[] = {
+		"the three sizes",
+		"the three bit counts",
+		"the nine bits",
+		"the three sizes over the real maximum"
+	};
+	const int count = (int)(sizeof(variants) / sizeof(variants[0]));
+	arena_settings_t settings;
+	const int seeds = 3;
+	int budgets[1];
+
+	arena_settings_init(&settings);
+	budgets[0] = settings.training_games;
+
+	printf("\n  the representation: the same %d games, the same %d seeds, and"
+	       " only the features are changed\n\n", settings.training_games, seeds);
+
+	printf("  %-38s %5s %8s %-12s %9s %9s %9s %12s %12s\n", "the features",
+	       "width", "numbers", "taught by", "out by", "the truth", "the best",
+	       "the best move", "it leaves the");
+	printf("  %-38s %5s %8s %-12s %9s %9s %9s %12s %12s\n", "", "", "", "",
+	       "the truth", "lowest", "highest", "of the moves", "opponent lost");
+
+	for (int variant = 0; variant < count; variant++) {
+		game_t game;
+		analysis_curve_t curve;
+
+		nim_game_with_features(&game, variants[variant]);
+
+		for (int mode = 0; mode < 2; mode++) {
+			double errors[ANALYSIS_MAX_SEEDS];
+			double best[ANALYSIS_MAX_SEEDS];
+			double left[ANALYSIS_MAX_SEEDS];
+			double middle, lowest, highest;
+
+			settings.learning = mode == 0 ? ARENA_LEARN_TRUTH : ARENA_LEARN_SELF;
+
+			if (!analysis_curve(&settings, &game, oracle, budgets, 1, seeds, &curve)) {
+				printf("  the representation could not be measured\n");
+				return;
+			}
+
+			for (int seed = 0; seed < seeds; seed++) {
+				const analysis_t *measured = &curve.measure[0][seed];
+
+				errors[seed] = measured->truth_error;
+				best[seed] = measured->moves > 0 ?
+					(double)measured->best_moves / measured->moves : 0.0;
+				left[seed] = measured->winning_positions > 0 ?
+					(double)measured->winning_moves / measured->winning_positions : 0.0;
+			}
+
+			summarise(errors, seeds, &middle, &lowest, &highest);
+
+			printf("  %-38s %5d %8d %-12s %9.3f %9.3f %9.3f", variant == 0 && mode == 0 ?
+			       names[variant] : "", game.n_features,
+			       count_the_parameters(game.n_features, settings.hidden_neurons),
+			       mode == 0 ? "the truth" : "its games",
+			       middle, lowest, highest);
+
+			summarise(best, seeds, &middle, &lowest, &highest);
+			printf(" %12.3f", middle);
+
+			summarise(left, seeds, &middle, &lowest, &highest);
+			printf(" %12.3f\n", middle);
+		}
+	}
+}
+
+/*
+ * The curve of learning for each representation: how far along the curve a
+ * representation gets, and how quickly.
+ */
+static void show_the_curve_of_each_representation(const oracle_t *oracle)
+{
+	const nim_features_t variants[] = {
+		NIM_FEATURES_SIZES,
+		NIM_FEATURES_COUNTS,
+		NIM_FEATURES_BITS,
+		NIM_FEATURES_REAL_RANGE
+	};
+	const char *names[] = {
+		"the three sizes",
+		"the three bit counts",
+		"the nine bits",
+		"the three sizes over the real maximum"
+	};
+	const int count = (int)(sizeof(variants) / sizeof(variants[0]));
+	const int budgets[] = { 0, 1000, 2000, 5000, 10000, 20000 };
+	const int budgets_count = (int)(sizeof(budgets) / sizeof(budgets[0]));
+	arena_settings_t settings;
+	analysis_curve_t curves[4];
+
+	arena_settings_init(&settings);
+	settings.learning = ARENA_LEARN_TRUTH;
+
+	for (int variant = 0; variant < count; variant++) {
+		game_t game;
+
+		nim_game_with_features(&game, variants[variant]);
+
+		if (!analysis_curve(&settings, &game, oracle, budgets, budgets_count, 1,
+		                    &curves[variant])) {
+			printf("\n  the curve of each representation could not be measured\n");
+			return;
+		}
+	}
+
+	printf("\n  the curve of learning of each representation, one seed, taught"
+	       " by the perfect player\n\n");
+
+	for (int variant = 0; variant < count; variant++)
+		printf("  %-36s", variant == 0 ? "the games" : names[variant]);
+	printf("\n");
+
+	for (int budget = 0; budget < budgets_count; budget++) {
+		printf("  %8d", budgets[budget]);
+
+		for (int variant = 0; variant < count; variant++)
+			printf(" %17.3f", curves[variant].measure[budget][0].truth_error);
+
+		printf("\n");
+	}
+}
+
+/*
  * The investigation of the model of Nim: what has it actually learned?
  *
  * The first part maps a game out move by move, so that the failure can be
@@ -806,6 +963,8 @@ static void run_the_nim_investigation(const game_t *game, const oracle_t *oracle
 	       measured.moves > 0 ? measured.value_lost / measured.moves : 0.0);
 
 	show_the_curve_of_learning(game, oracle);
+	show_the_representation(oracle);
+	show_the_curve_of_each_representation(oracle);
 }
 
 int main(int argc, char *argv[], char *env[]) {

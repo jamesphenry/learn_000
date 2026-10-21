@@ -449,6 +449,119 @@ static char *test_it_offers_every_position_it_can_reach(void)
 	return NULL;
 }
 
+/*
+ * The ways of giving the heaps to a model. The three sizes are as they have
+ * always been: over the biggest heap the game allows.
+ */
+static char *test_the_sizes_are_given_over_the_biggest_heap_the_game_allows(void)
+{
+	game_t sized;
+	game_position_t position;
+	double features[GAME_MAX_FEATURES];
+
+	nim_game_with_features(&sized, NIM_FEATURES_SIZES);
+
+	_it_should("take three numbers", sized.n_features == NIM_HEAPS);
+
+	position_with(&position, 3, 4, 5, 0);
+	sized.features(&position, features);
+
+	_it_should("give the first heap", features[0] == 3.0 / NIM_MAX_HEAP);
+	_it_should("give the second heap", features[1] == 4.0 / NIM_MAX_HEAP);
+	_it_should("give the third heap", features[2] == 5.0 / NIM_MAX_HEAP);
+
+	return NULL;
+}
+
+/*
+ * The same three sizes, over the biggest heap there really is. The heaps
+ * never grow, so the fifth is all the range there is.
+ */
+static char *test_the_sizes_can_be_given_over_the_heap_really_there_is(void)
+{
+	game_t ranged;
+	game_position_t position;
+	double features[GAME_MAX_FEATURES];
+
+	nim_game_with_features(&ranged, NIM_FEATURES_REAL_RANGE);
+
+	_it_should("take three numbers", ranged.n_features == NIM_HEAPS);
+
+	position_with(&position, 3, 4, 5, 0);
+	ranged.features(&position, features);
+
+	_it_should("give the first heap", features[0] == 3.0 / NIM_REAL_MAX_HEAP);
+	_it_should("give the second heap", features[1] == 4.0 / NIM_REAL_MAX_HEAP);
+	_it_should("give the third heap", features[2] == 5.0 / NIM_REAL_MAX_HEAP);
+
+	return NULL;
+}
+
+/*
+ * The nine bits of the three sizes: the heap of three is 011, the heap of
+ * four is 100 and the heap of five is 101.
+ */
+static char *test_the_bits_can_be_given(void)
+{
+	game_t bits;
+	game_position_t position;
+	double features[GAME_MAX_FEATURES];
+
+	nim_game_with_features(&bits, NIM_FEATURES_BITS);
+
+	_it_should("take nine numbers", bits.n_features == NIM_HEAPS * NIM_BITS);
+
+	position_with(&position, 3, 4, 5, 0);
+	bits.features(&position, features);
+
+	_it_should("give the bits of the first heap",
+		features[0] == 1.0 && features[1] == 1.0 && features[2] == 0.0);
+	_it_should("give the bits of the second heap",
+		features[3] == 0.0 && features[4] == 0.0 && features[5] == 1.0);
+	_it_should("give the bits of the third heap",
+		features[6] == 1.0 && features[7] == 0.0 && features[8] == 1.0);
+
+	return NULL;
+}
+
+/*
+ * The three bit counts, and the rule of the game: the exclusive or of the
+ * heaps is zero exactly when every one of the counts is even.
+ */
+static char *test_the_bit_counts_carry_the_whole_rule_of_the_game(void)
+{
+	game_t counts;
+	game_position_t position;
+	double features[GAME_MAX_FEATURES];
+	int wrong = 0;
+
+	nim_game_with_features(&counts, NIM_FEATURES_COUNTS);
+
+	_it_should("take three numbers", counts.n_features == NIM_BITS);
+
+	for (int a = 0; a <= NIM_START_HEAP_0; a++)
+		for (int b = 0; b <= NIM_START_HEAP_1; b++)
+			for (int c = 0; c <= NIM_START_HEAP_2; c++) {
+				int even = 1;
+
+				position_with(&position, a, b, c, 0);
+				counts.features(&position, features);
+
+				for (int bit = 0; bit < NIM_BITS; bit++) {
+					int count = (int)(features[bit] * NIM_HEAPS + 0.5);
+
+					if (count % 2 != 0) even = 0;
+				}
+
+				if (even != (nim_sum(nim_state_of(&position)) == 0)) wrong++;
+			}
+
+	_it_should("tell a losing position from a winning one everywhere",
+		wrong == 0);
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	nim_game(&game);
@@ -459,6 +572,10 @@ static char *run_tests()
 	_run_test(test_it_refuses_an_illegal_move);
 	_run_test(test_the_game_ends_when_there_are_no_stones_left);
 	_run_test(test_the_features_are_the_sizes_of_the_heaps_as_a_fraction);
+	_run_test(test_the_sizes_are_given_over_the_biggest_heap_the_game_allows);
+	_run_test(test_the_sizes_can_be_given_over_the_heap_really_there_is);
+	_run_test(test_the_bits_can_be_given);
+	_run_test(test_the_bit_counts_carry_the_whole_rule_of_the_game);
 	_run_test(test_the_nim_sum_is_the_exclusive_or_of_the_heaps);
 	_run_test(test_it_offers_every_position_it_can_reach);
 	_run_test(test_the_perfect_player_knows_what_a_position_is_worth);
