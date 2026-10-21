@@ -13,6 +13,7 @@ void arena_settings_init(arena_settings_t *settings)
 	settings->hidden_neurons = 16;
 	settings->training_games = 500;
 	settings->evaluation_games = 200;
+	settings->match_games = 200;
 	settings->training_seed = 1;
 	settings->evaluation_seed = 2;
 	settings->learning_rate = 0.05;
@@ -76,20 +77,81 @@ static int arena_learn_from_the_truth(trainer_t *trainer, policy_t *policy, int 
 	return learned;
 }
 
+/* What a model looks like at one moment. */
+typedef struct {
+	evaluation_t evaluation;
+	skill_t skill;
+	perfect_result_t perfect;
+} arena_look_t;
+
+/* Measures a model: how it does against an opponent that plays at random,
+ * how much worth it gives away, and how it does against the perfect player. */
+static void arena_measure(const arena_settings_t *settings, const network_t *network,
+                           arena_look_t *look)
+{
+	memset(look, 0, sizeof(*look));
+
+	evaluate_network(network, settings->evaluation_seed, settings->evaluation_games,
+	                 &look->evaluation);
+	evaluate_skill(network, settings->evaluation_seed, settings->evaluation_games,
+	               &look->skill);
+	evaluate_against_perfect(network, settings->evaluation_seed,
+	                         settings->evaluation_games, &look->perfect);
+}
+
+/*
+ * Builds one model, measures it, teaches it, and measures it again. The
+ * games it learns from and the games it is measured with are apart from one
+ * another, so the measurement is on games the model has not seen.
+ */
+static bool arena_train_one(const arena_settings_t *settings, init_scheme_t scheme,
+                             rng_t *rng, network_t *network, arena_result_t *result)
+{
+	policy_t policy;
+	trainer_t trainer;
+	arena_look_t before;
+	arena_look_t after;
+	int trained;
+
+	if (!arena_build(network, settings, scheme, rng)) return false;
+
+	/* what the model is like before it has learned anything */
+	arena_measure(settings, network, &before);
+
+	/* and then it learns */
+	trainer_init(&trainer, network, settings->learning_rate);
+	policy_init(&policy, network, settings->training_seed, settings->temperature);
+
+	if (settings->learning == ARENA_LEARN_TRUTH)
+		trained = arena_learn_from_the_truth(&trainer, &policy, settings->training_games);
+	else
+		trained = trainer_run(&trainer, &policy, settings->training_games);
+
+	/* and what it is like afterwards, on games it has not seen */
+	arena_measure(settings, network, &after);
+
+	result->win_rate_before = 100.0 * before.evaluation.wins / before.evaluation.games;
+	result->win_rate_after = 100.0 * after.evaluation.wins / after.evaluation.games;
+	result->brier_before = before.evaluation.brier_score;
+	result->brier_after = after.evaluation.brier_score;
+	result->truth_before = before.evaluation.truth_error;
+	result->truth_after = after.evaluation.truth_error;
+	result->value_lost_before = before.skill.moves > 0 ?
+		before.skill.value_lost / before.skill.moves : 0.0;
+	result->value_lost_after = after.skill.moves > 0 ?
+		after.skill.value_lost / after.skill.moves : 0.0;
+	result->perfect_before = before.perfect;
+	result->perfect_after = after.perfect;
+	result->trained_games = trained;
+
+	return true;
+}
+
 bool arena_run(const arena_settings_t *settings, init_scheme_t scheme,
                arena_result_t *result)
 {
 	network_t network;
-	policy_t policy;
-	trainer_t trainer;
 	rng_t rng;
-	evaluation_t before;
-	evaluation_t after;
-	skill_t skill_before;
-	skill_t skill_after;
-	perfect_result_t perfect_before;
-	perfect_result_t perfect_after;
-	int trained;
 
 	if (settings == NULL || result == NULL) return false;
 	if (settings->training_games < 0 || settings->evaluation_games < 1) return false;
@@ -99,46 +161,41 @@ bool arena_run(const arena_settings_t *settings, init_scheme_t scheme,
 
 	rng_seed(&rng, settings->training_seed);
 
-	if (!arena_build(&network, settings, scheme, &rng)) return false;
+	return arena_train_one(settings, scheme, &rng, &network, result);
+}
 
-	/* what the model is like before it has learned anything */
-	if (!evaluate_network(&network, settings->evaluation_seed, settings->evaluation_games, &before))
-		return false;
+bool arena_run_all(const arena_settings_t *settings, arena_report_t *report)
+{
+	network_t networks[ARENA_SCHEMES];
+	rng_t rng;
 
-	evaluate_skill(&network, settings->evaluation_seed, settings->evaluation_games, &skill_before);
-	evaluate_against_perfect(&network, settings->evaluation_seed,
-	                         settings->evaluation_games, &perfect_before);
+	if (settings == NULL || report == NULL) return false;
+	if (settings->training_games < 0 || settings->evaluation_games < 1) return false;
+	if (settings->match_games < 1) return false;
+	if (settings->hidden_neurons < 1) return false;
 
-	/* and then it learns */
-	trainer_init(&trainer, &network, settings->learning_rate);
-	policy_init(&policy, &network, settings->training_seed, settings->temperature);
+	memset(report, 0, sizeof(*report));
 
-	if (settings->learning == ARENA_LEARN_TRUTH)
-		trained = arena_learn_from_the_truth(&trainer, &policy, settings->training_games);
-	else
-		trained = trainer_run(&trainer, &policy, settings->training_games);
+	rng_seed(&rng, settings->training_seed);
 
-	/* and what it is like afterwards, on games it has not seen */
-	if (!evaluate_network(&network, settings->evaluation_seed, settings->evaluation_games, &after))
-		return false;
+	/* every model is given the same conditions, and the only thing that
+	 * differs between them is how they were started off */
+	for (int scheme = 0; scheme < ARENA_SCHEMES; scheme++) {
+		if (!arena_train_one(settings, (init_scheme_t)scheme, &rng, &networks[scheme],
+		                     &report->results[scheme]))
+			return false;
+	}
 
-	evaluate_skill(&network, settings->evaluation_seed, settings->evaluation_games, &skill_after);
-	evaluate_against_perfect(&network, settings->evaluation_seed,
-	                         settings->evaluation_games, &perfect_after);
-
-	result->win_rate_before = 100.0 * before.wins / before.games;
-	result->win_rate_after = 100.0 * after.wins / after.games;
-	result->brier_before = before.brier_score;
-	result->brier_after = after.brier_score;
-	result->truth_before = before.truth_error;
-	result->truth_after = after.truth_error;
-	result->value_lost_before = skill_before.moves > 0 ?
-		skill_before.value_lost / skill_before.moves : 0.0;
-	result->value_lost_after = skill_after.moves > 0 ?
-		skill_after.value_lost / skill_after.moves : 0.0;
-	result->perfect_before = perfect_before;
-	result->perfect_after = perfect_after;
-	result->trained_games = trained;
+	/* and then they play each other, each of them taking one colour and
+	 * then the other */
+	for (int first = 0; first < ARENA_SCHEMES; first++) {
+		for (int second = first + 1; second < ARENA_SCHEMES; second++) {
+			if (!evaluate_against(&networks[first], &networks[second],
+			                      settings->evaluation_seed, settings->match_games,
+			                      0.0, &report->matches[first][second]))
+				return false;
+		}
+	}
 
 	return true;
 }

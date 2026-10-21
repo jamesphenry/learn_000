@@ -13,6 +13,9 @@ typedef enum {
 	INIT_MAXIMUM /* every weight and bias at the same value */
 } init_scheme_t;
 
+/* How many ways there are to start a network off. */
+#define ARENA_SCHEMES 3
+
 /* The two ways a model can be taught. */
 typedef enum {
 	ARENA_LEARN_TRUTH, /* the perfect player says what each position is worth */
@@ -25,6 +28,7 @@ typedef struct {
 	int hidden_neurons;      /* how many neurons the hidden layer has */
 	int training_games;      /* how many games to learn from */
 	int evaluation_games;    /* how many games to measure with */
+	int match_games;         /* how many games the models play each other */
 	unsigned long long training_seed;
 	unsigned long long evaluation_seed;
 	double learning_rate;
@@ -51,6 +55,20 @@ typedef struct {
 	int trained_games;
 } arena_result_t;
 
+/*
+ * What all the models did, and how they fare against each other.
+ */
+typedef struct {
+	/* what each model did on its own, in the order of the ways of
+	 * starting off */
+	arena_result_t results[ARENA_SCHEMES];
+
+	/* how the models fare against each other. The match at [i][j] is the
+	 * one between the models started off in the ways i and j, and only the
+	 * upper half is filled in: a model does not play itself. */
+	match_result_t matches[ARENA_SCHEMES][ARENA_SCHEMES];
+} arena_report_t;
+
 /* The conditions a run is given, with sensible values for tic-tac-toe. */
 void arena_settings_init(arena_settings_t *settings);
 
@@ -61,5 +79,11 @@ void arena_settings_init(arena_settings_t *settings);
  */
 bool arena_run(const arena_settings_t *settings, init_scheme_t scheme,
                arena_result_t *result);
+
+/*
+ * Builds all three models, gives them the same conditions, measures each of
+ * them, and then has them play each other.
+ */
+bool arena_run_all(const arena_settings_t *settings, arena_report_t *report);
 
 #endif // ARENA_H

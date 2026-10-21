@@ -312,25 +312,43 @@ static void judge_a_game(void)
 static void run_the_arena(void)
 {
 	arena_settings_t settings;
-	arena_result_t result;
+	arena_report_t report;
 	const char *names[3] = { "zero", "random", "maximum" };
 
 	arena_settings_init(&settings);
 
 	printf("\nthe training arena\n");
-	printf("  %d games to learn from, %d to measure with\n\n",
-	       settings.training_games, settings.evaluation_games);
-	printf("  %-8s %10s %10s   %s\n", "started", "gave away", "against the",
-	       "out by the truth");
+	printf("  %d games to learn from, %d to measure with, %d between the models\n\n",
+	       settings.training_games, settings.evaluation_games, settings.match_games);
 
-	for (int scheme = 0; scheme < 3; scheme++) {
-		if (!arena_run(&settings, (init_scheme_t)scheme, &result)) continue;
+	if (!arena_run_all(&settings, &report)) {
+		printf("  the arena could not be run\n");
+		return;
+	}
 
-		printf("  %-8s %10.3f %10s   %.3f -> %.3f\n", names[scheme],
-		       result.value_lost_after,
-		       result.perfect_after.draws == result.perfect_after.games ?
-		         "all drawn" : "lost some",
-		       result.truth_before, result.truth_after);
+	printf("  %-8s %10s %10s   %s\n", "started", "won at random", "out by",
+	       "against the perfect player");
+
+	for (int scheme = 0; scheme < ARENA_SCHEMES; scheme++) {
+		printf("  %-8s %9.1f%% %10.3f   %3d won %3d drawn %3d lost\n",
+		       names[scheme],
+		       report.results[scheme].win_rate_after,
+		       report.results[scheme].truth_after,
+		       report.results[scheme].perfect_after.wins,
+		       report.results[scheme].perfect_after.draws,
+		       report.results[scheme].perfect_after.losses);
+	}
+
+	printf("\n  the models against each other\n");
+
+	for (int first = 0; first < ARENA_SCHEMES; first++) {
+		for (int second = first + 1; second < ARENA_SCHEMES; second++) {
+			printf("  %-8s against %-8s: %3d won, %3d drawn, %3d lost\n",
+			       names[first], names[second],
+			       report.matches[first][second].first_wins,
+			       report.matches[first][second].draws,
+			       report.matches[first][second].second_wins);
+		}
 	}
 }
 

@@ -218,6 +218,82 @@ static char *test_the_perfect_player_teaches_better_than_its_own_games(void)
 	return NULL;
 }
 
+static char *test_the_models_play_each_other(void)
+{
+	arena_settings_t settings;
+	arena_report_t report;
+
+	build_small_settings(&settings);
+	settings.match_games = 20;
+
+	_it_should("run", arena_run_all(&settings, &report));
+
+	for (int first = 0; first < ARENA_SCHEMES; first++) {
+		_it_should("train every model the same",
+			report.results[first].trained_games == settings.training_games);
+
+		for (int second = first + 1; second < ARENA_SCHEMES; second++) {
+			_it_should("play every pair of models",
+				report.matches[first][second].games == settings.match_games);
+			_it_should("count every game once",
+				report.matches[first][second].first_wins +
+				report.matches[first][second].draws +
+				report.matches[first][second].second_wins == settings.match_games);
+			_it_should("take each colour the same number of times",
+				report.matches[first][second].first_as_x ==
+				settings.match_games / 2);
+			_it_should("have no games flagged",
+				report.matches[first][second].flagged == 0);
+		}
+	}
+
+	return NULL;
+}
+
+static char *test_the_same_report_comes_again(void)
+{
+	arena_settings_t settings;
+	arena_report_t first;
+	arena_report_t second;
+
+	build_small_settings(&settings);
+
+	arena_run_all(&settings, &first);
+	arena_run_all(&settings, &second);
+
+	for (int i = 0; i < ARENA_SCHEMES; i++)
+		for (int j = i + 1; j < ARENA_SCHEMES; j++) {
+			_it_should("give the same wins",
+				first.matches[i][j].first_wins == second.matches[i][j].first_wins);
+			_it_should("give the same draws",
+				first.matches[i][j].draws == second.matches[i][j].draws);
+		}
+
+	return NULL;
+}
+
+static char *test_the_model_that_learned_beats_the_one_that_did_not(void)
+{
+	arena_settings_t settings;
+	arena_report_t report;
+
+	build_small_settings(&settings);
+	settings.training_games = 500;
+	settings.match_games = 40;
+	settings.learning = ARENA_LEARN_TRUTH;
+
+	_it_should("run", arena_run_all(&settings, &report));
+
+	/* the model that was started at random has learned the worth of a
+	 * position and the one that was started at zero never can, so the
+	 * second should get the better of it */
+	_it_should("give the learned model the better of it",
+		report.matches[INIT_ZERO][INIT_RANDOM].first_wins <
+		report.matches[INIT_ZERO][INIT_RANDOM].second_wins);
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	_run_test(test_the_settings_start_with_sensible_values);
@@ -229,6 +305,9 @@ static char *run_tests()
 	_run_test(test_a_model_that_learns_gets_better);
 	_run_test(test_a_run_says_what_the_model_gave_away);
 	_run_test(test_the_perfect_player_teaches_better_than_its_own_games);
+	_run_test(test_the_models_play_each_other);
+	_run_test(test_the_same_report_comes_again);
+	_run_test(test_the_model_that_learned_beats_the_one_that_did_not);
 
 	return NULL;
 }
