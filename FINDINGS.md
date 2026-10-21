@@ -8,6 +8,12 @@ question could be answered at all.
 Everything here is measured. Where a number appears it was produced by the
 code in this repository, and the way to reproduce it is given.
 
+One thing to keep in mind when reading it: the worth of a position used to
+mean "the chance that X wins it", and now it means "the chance that the
+player to move wins it". The figures in the next two sections were
+measured before that change and are marked where it matters; the arena's
+and the league's figures are the current ones.
+
 ---
 
 ## 1. The model could not learn, and there were three reasons
@@ -36,8 +42,15 @@ outputs' spread collapsed from 0.42 to 0.15 while it trained.
 
 The model answered with a number for every cell, all of which had to come
 out of one shared hidden layer. That layer then had to hold enough for nine
-different questions about the same board at once, and it does not: trained
-on the perfect answer for every cell, the shape still only reached 84%.
+different questions about the same board at once.
+
+Measured before the worth changed its meaning, that shape trained on the
+perfect answer for every cell still only reached 84%, where one number for
+the whole position reached 95%. Measured again afterwards the two come out
+about even — 60% and 60% — so the shape was not the reason to change it.
+What the change bought was the meaning: one number for a position is the
+worth of that position, which is what a game can say about a position it
+has never seen before.
 
 ### The clamped activation was linear in practice
 
@@ -46,7 +59,8 @@ unchanged. The hidden layer was therefore linear over almost all of the
 range it worked in, and the only thing that made it bend was a sum falling
 below the floor, where the unit stops learning altogether.
 
-Replacing it with a rectified unit took the same task from 78% to 95%.
+Replacing it with a rectified unit took the same task from 78% to 95%
+(measured before the worth changed its meaning).
 
 ### What the model became
 
@@ -66,8 +80,8 @@ knew. The same model gave away:
 
 | measured against | worth given away, a move |
 |---|---|
-| itself | 0.048 |
-| a player that plays at random | 0.199 |
+| itself | 0.000 |
+| a player that plays at random | 0.181 |
 
 Nearly four times as much once the opponent was varied. The arena now
 reports both, because the gap between them is the difference between a
@@ -189,40 +203,41 @@ they meet three times.
 | | seed 42 | seed 1978 |
 |---|---|---|
 | **before either has learned anything** | | |
-| gave away a move | 0.590 | 0.365 |
-| out by the truth | 0.337 | 0.240 |
+| gave away a move | 0.583 | 0.583 |
+| out by the truth | 0.263 | 0.263 |
 | drew with the perfect player | 0 | 100 |
 | seed 42 won | 100 | 100 |
 | the games were drawn | 0 | 0 |
 | **after each has learned from its own games** | | |
-| gave away a move | 0.394 | 0.317 |
-| out by the truth | 0.210 | 0.209 |
-| drew with the perfect player | 83 | 95 |
-| seed 42 won | 28 | 63 |
-| the games were drawn | 109 | 109 |
+| gave away a move | 0.216 | 0.208 |
+| out by the truth | 0.203 | 0.141 |
+| drew with the perfect player | 200 | 200 |
+| seed 42 won | 0 | 100 |
+| the games were drawn | 100 | 100 |
 | **after they have learned against each other** | | |
-| gave away a move | 0.324 | 0.300 |
-| out by the truth | 0.205 | 0.186 |
-| drew with the perfect player | 62 | 90 |
-| seed 42 won | 37 | 58 |
-| the games were drawn | 105 | 105 |
+| gave away a move | 0.324 | 0.245 |
+| out by the truth | 0.231 | 0.189 |
+| drew with the perfect player | 100 | 200 |
+| seed 42 won | 19 | 8 |
+| the games were drawn | 173 | 173 |
 
 **A model does learn without being told the answers.** Over fifty thousand
-games of its own the truth error fell from 0.34 to 0.21 and the worth it
-gave away fell from 0.59 to 0.39. It is well short of the model the
+games of its own the truth error fell from 0.26 to 0.20 and the worth it
+gave away fell from 0.58 to 0.22. It is well short of the model the
 perfect player taught, which draws every game against the perfect player,
 but it is a long way from the model that had learned nothing.
 
-**Two models that learned separately agree.** They drew 109 games out of
+**Two models that learned separately agree.** They drew 100 games out of
 200 against each other, where before either of them had learned anything
 they drew none at all — every game was the same game, and the first player
 always won it. Two different starting points, the same game.
 
 **Learning against each other afterwards adds nothing.** The truth error
-barely moves, and against the perfect player the first of them gets
-*worse* rather than better: 83 draws became 62. Fifty thousand games of
-learning one opponent instead of the game is not the same as fifty
-thousand games of learning the game, and the measurement says so.
+gets *worse* rather than better — 0.20 becomes 0.23 and 0.14 becomes
+0.19 — and so does the worth given away: 0.22 becomes 0.32. Fifty
+thousand games of learning one opponent instead of the game is not the
+same as fifty thousand games of learning the game, and the measurement
+says so.
 
 ---
 
