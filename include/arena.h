@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include "evaluate.h"
+#include "game.h"
 #include "network.h"
 #include "rng.h"
 
@@ -114,21 +115,23 @@ void arena_settings_init(arena_settings_t *settings);
  * games it learns from and the games it is measured with are apart from one
  * another, so the measurement is on games the model has not seen.
  */
-bool arena_run(const arena_settings_t *settings, init_scheme_t scheme,
-               arena_result_t *result);
+bool arena_run(const arena_settings_t *settings, const game_t *game,
+               const oracle_t *oracle, init_scheme_t scheme, arena_result_t *result);
 
 /*
  * Builds all three models, gives them the same conditions, measures each of
  * them, and then has them play each other.
  */
-bool arena_run_all(const arena_settings_t *settings, arena_report_t *report);
+bool arena_run_all(const arena_settings_t *settings, const game_t *game,
+                   const oracle_t *oracle, arena_report_t *report);
 
 /*
  * Runs the arena several times, each time with a seed of its own, and says
  * what the models did over all of them. A ranking that holds from one seed
  * to the next is worth more than one that was measured once.
  */
-bool arena_survey(const arena_settings_t *settings, int runs, arena_survey_t *survey);
+bool arena_survey(const arena_settings_t *settings, const game_t *game,
+                  const oracle_t *oracle, int runs, arena_survey_t *survey);
 
 /* The three stages of a duel. */
 typedef enum {
@@ -174,7 +177,8 @@ typedef struct {
 	match_result_t together_games;
 } arena_duel_t;
 
-bool arena_duel(const arena_settings_t *settings, unsigned long long first_seed,
+bool arena_duel(const arena_settings_t *settings, const game_t *game,
+                const oracle_t *oracle, unsigned long long first_seed,
                 unsigned long long second_seed, arena_duel_t *duel);
 
 /* How many models a league holds. */
@@ -270,8 +274,8 @@ typedef struct {
  * to be in the league and how strong they were, while the points it earns
  * against a held back opponent depend only on the model and the opponent.
  */
-bool arena_league(const arena_settings_t *settings, int models,
-                  arena_league_t *league);
+bool arena_league(const arena_settings_t *settings, const game_t *game,
+                  const oracle_t *oracle, int models, arena_league_t *league);
 
 
 #endif // ARENA_H

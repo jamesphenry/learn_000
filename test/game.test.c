@@ -4,204 +4,319 @@
 #include "test-runner.h"
 #include <stdbool.h>
 
-#include "../src/board.c"
 #include "../src/game.c"
-#include "../src/layer.c"
-#include "../src/network.c"
-#include "../src/neuron.c"
-#include "../src/policy.c"
-#include "../src/rng.c"
 
-/* A network that says every position is worth the same, so the policy
- * breaks every tie at random. */
-static void build_the_test_network(network_t *network)
+/*
+ * A toy game, so that the framework can be tested without a game in sight: a
+ * pile of stones, and the players take one at a time. The player who takes
+ * the last one wins.
+ *
+ * The state lives in the state of a position, and the only move there is
+ * move zero.
+ */
+#define TOY_STONES 5
+
+typedef struct {
+	int stones;
+	int turn;
+} toy_t;
+
+static toy_t *toy_of(game_position_t *position)
 {
-	network_init(network);
-	network_add_layer(network, CELL_COUNT, 2, ACTIVATION_RELU);
-	network_add_layer(network, 2, 1, ACTIVATION_SIGMOID);
+	return (toy_t *)position->state.bytes;
 }
 
-static char *test_a_game_starts_empty(void)
+static const toy_t *toy_in(const game_position_t *position)
 {
-	game_t game;
-
-	game_init(&game);
-
-	_it_should("start with no moves", game.moves == 0);
-	_it_should("start with X to move", game_turn(&game) == 'X');
-	_it_should("start with an empty board", board_is_full(&game.board) == false);
-
-	return NULL;
+	return (const toy_t *)position->state.bytes;
 }
 
-static char *test_a_move_places_the_mark(void)
+static void toy_start(game_position_t *position)
 {
-	game_t game;
+	toy_t *toy = toy_of(position);
 
-	game_init(&game);
+	toy->stones = TOY_STONES;
+	toy->turn = 0;
 
-	_it_should("take the move", game_play_move(&game, CELL_TOP_LEFT));
-	_it_should("put an X down", game.board.cells[CELL_TOP_LEFT] == VALUE_X);
-	_it_should("count the move", game.moves == 1);
-	_it_should("pass the turn to O", game_turn(&game) == 'O');
-
-	game_play_move(&game, CELL_CENTER);
-	_it_should("put an O down next", game.board.cells[CELL_CENTER] == VALUE_O);
-	_it_should("pass the turn back to X", game_turn(&game) == 'X');
-
-	return NULL;
+	position->n_moves = 1;
+	position->moves[0] = 0;
 }
 
-static char *test_it_refuses_an_illegal_move(void)
+static bool toy_play(game_position_t *position, game_move_t move)
 {
-	game_t game;
+	toy_t *toy = toy_of(position);
 
-	game_init(&game);
-	game_play_move(&game, CELL_TOP_LEFT);
+	if (move != 0) return false;
+	if (toy->stones < 1) return false;
 
-	_it_should("refuse a cell that is taken", !game_play_move(&game, CELL_TOP_LEFT));
-	_it_should("not count the move", game.moves == 1);
-	_it_should("refuse a cell that is outside the board",
-		!game_play_move(&game, (board_cell_t)CELL_COUNT));
-	_it_should("not count that move either", game.moves == 1);
+	toy->stones--;
+	toy->turn = 1 - toy->turn;
 
-	return NULL;
+	position->n_moves = (toy->stones > 0) ? 1 : 0;
+
+	return true;
 }
 
-static char *test_it_stops_when_someone_wins(void)
+static void toy_features(const game_position_t *position, double *out)
 {
-	game_t game;
-
-	game_init(&game);
-	game_play_move(&game, CELL_TOP_LEFT);
-	game_play_move(&game, CELL_CENTER);
-	game_play_move(&game, CELL_TOP);
-	game_play_move(&game, CELL_MIDDLE_LEFT);
-	game_play_move(&game, CELL_TOP_RIGHT);
-
-	_it_should("see that the game is over", game_is_over(&game));
-	_it_should("say that X won", game_result(&game) == GAME_X_WINS);
-	_it_should("refuse another move", !game_play_move(&game, CELL_BOTTOM));
-
-	return NULL;
+	out[0] = (double)toy_in(position)->stones;
 }
 
-static char *test_a_full_board_with_no_line_is_a_draw(void)
+static bool toy_over(const game_position_t *position)
 {
-	game_t game;
-
-	/* X O X / X O O / O X X, which is a draw and not a win for either */
-	game_init(&game);
-	game_play_move(&game, CELL_TOP_LEFT);
-	game_play_move(&game, CELL_TOP);
-	game_play_move(&game, CELL_TOP_RIGHT);
-	game_play_move(&game, CELL_CENTER);
-	game_play_move(&game, CELL_MIDDLE_LEFT);
-	game_play_move(&game, CELL_MIDDLE_RIGHT);
-	game_play_move(&game, CELL_BOTTOM);
-	game_play_move(&game, CELL_BOTTOM_LEFT);
-	game_play_move(&game, CELL_BOTTOM_RIGHT);
-
-	_it_should("see that the game is over", game_is_over(&game));
-	_it_should("say that it is a draw", game_result(&game) == GAME_DRAW);
-
-	return NULL;
+	return toy_in(position)->stones < 1;
 }
 
-static char *test_two_policies_can_play_a_whole_game(void)
+static int toy_to_move(const game_position_t *position)
 {
-	network_t network;
-	policy_t x_policy;
-	policy_t o_policy;
-	game_t game;
-	game_result_t result;
-
-	build_the_test_network(&network);
-	policy_init(&x_policy, &network, 1, 0.0);
-	policy_init(&o_policy, &network, 2, 0.0);
-
-	result = game_play(&game, &x_policy, &o_policy);
-
-	_it_should("finish the game", result == GAME_X_WINS || result == GAME_O_WINS ||
-		result == GAME_DRAW);
-	_it_should("have played a whole game", game.moves >= 5 && game.moves <= 9);
-	_it_should("have recorded every move", game.history[game.moves - 1] != CELL_COUNT);
-
-	return NULL;
+	return toy_in(position)->turn;
 }
 
-static char *test_a_game_never_goes_on_for_ever(void)
+static game_outcome_t toy_outcome(const game_position_t *position)
 {
-	network_t network;
-	policy_t policy;
-	game_t game;
-	int moves = 0;
+	/* the player to move has run out of stones, so the other one won */
+	if (toy_in(position)->turn == 0) return GAME_SECOND_WINS;
 
-	build_the_test_network(&network);
-	policy_init(&policy, &network, 3, 1.0);
+	return GAME_FIRST_WINS;
+}
 
-	game_init(&game);
-	while (!game_is_over(&game) && moves < 100) {
-		board_cell_t move;
+static int toy_samples(game_position_t *out, int wanted)
+{
+	int count = 0;
 
-		if (!policy_select_move(&policy, &game.board, &move)) break;
-		game_play_move(&game, move);
-		moves++;
+	if (out == NULL || wanted < 1) return 0;
+
+	for (int stones = TOY_STONES; stones >= 0 && count < wanted; stones--) {
+		toy_start(&out[count]);
+		toy_of(&out[count])->stones = stones;
+		count++;
 	}
 
-	_it_should("finish within nine moves", moves >= 5 && moves <= 9);
-	_it_should("have come to an end", game_is_over(&game));
+	return count;
+}
+
+static void toy_game(game_t *game)
+{
+	game->n_features = 1;
+	game->start = toy_start;
+	game->play = toy_play;
+	game->features = toy_features;
+	game->over = toy_over;
+	game->to_move = toy_to_move;
+	game->outcome = toy_outcome;
+	game->samples = toy_samples;
+}
+
+/*
+ * The perfect player for the toy game: with an odd number of stones the
+ * player to move takes the last one, and with an even number the other one
+ * does.
+ */
+static double toy_worth(void *state, const game_position_t *position)
+{
+	(void)state;
+
+	return (toy_in(position)->stones % 2 == 1) ? 1.0 : 0.0;
+}
+
+static game_move_t toy_choose(void *state, const game_position_t *position)
+{
+	(void)state;
+
+	if (toy_over(position)) return -1;
+
+	return 0;
+}
+
+static game_outcome_t toy_oracle_outcome(void *state, const game_position_t *final)
+{
+	(void)state;
+
+	return toy_outcome(final);
+}
+
+static void *toy_make_state(void)
+{
+	return NULL;
+}
+
+static void toy_free_state(void *state)
+{
+	(void)state;
+}
+
+static void toy_oracle(oracle_t *oracle)
+{
+	oracle->state = NULL;
+	oracle->worth = toy_worth;
+	oracle->choose = toy_choose;
+	oracle->outcome = toy_oracle_outcome;
+	oracle->make_state = toy_make_state;
+	oracle->free_state = toy_free_state;
+}
+
+/* The chooser the tests use: it always takes the only move there is. */
+static game_move_t always_take(void *context, const game_position_t *position)
+{
+	(void)context;
+
+	if (position->n_moves < 1) return -1;
+
+	return position->moves[0];
+}
+
+/* The chooser that refuses to move. */
+static game_move_t never_move(void *context, const game_position_t *position)
+{
+	(void)context;
+	(void)position;
+
+	return -1;
+}
+
+static char *test_a_game_is_played_to_the_end(void)
+{
+	game_t game;
+	game_trace_t trace;
+
+	toy_game(&game);
+
+	game_play(&game, always_take, NULL, always_take, NULL, &trace);
+
+	_it_should("have played every stone", trace.n_played == TOY_STONES);
+	_it_should("have offered every move", trace.n_offered == TOY_STONES);
+	_it_should("have come to an end", game.over(&trace.position));
+	_it_should("have gone to the first player, who took the last stone",
+		game.outcome(&trace.position) == GAME_FIRST_WINS);
 
 	return NULL;
 }
 
-static char *test_o_can_win(void)
+static char *test_the_turn_goes_back_and_forth(void)
 {
 	game_t game;
+	game_position_t position;
 
-	game_init(&game);
-	/* X takes the top left and the top middle, O takes the middle row */
-	game_play_move(&game, CELL_TOP_LEFT);
-	game_play_move(&game, CELL_CENTER);
-	game_play_move(&game, CELL_TOP);
-	game_play_move(&game, CELL_MIDDLE_LEFT);
-	game_play_move(&game, CELL_BOTTOM_RIGHT);
-	game_play_move(&game, CELL_MIDDLE_RIGHT);
+	toy_game(&game);
 
-	_it_should("see that the game is over", game_is_over(&game));
-	_it_should("say that O won", game_result(&game) == GAME_O_WINS);
+	game.start(&position);
+
+	_it_should("start with the first player", game.to_move(&position) == 0);
+
+	game.play(&position, 0);
+
+	_it_should("pass the turn to the other player", game.to_move(&position) == 1);
 
 	return NULL;
 }
 
-static char *test_it_records_the_moves(void)
+static char *test_a_game_stops_when_a_side_cannot_move(void)
 {
 	game_t game;
+	game_trace_t trace;
 
-	game_init(&game);
-	game_play_move(&game, CELL_TOP_LEFT);
-	game_play_move(&game, CELL_CENTER);
-	game_play_move(&game, CELL_TOP);
+	toy_game(&game);
 
-	_it_should("record the first move", game.history[0] == CELL_TOP_LEFT);
-	_it_should("record the second move", game.history[1] == CELL_CENTER);
-	_it_should("record the third move", game.history[2] == CELL_TOP);
-	_it_should("record as many moves as were played", game.moves == 3);
+	game_play(&game, never_move, NULL, always_take, NULL, &trace);
+
+	_it_should("have played no moves at all", trace.n_played == 0);
+	_it_should("have offered no moves at all", trace.n_offered == 0);
+
+	return NULL;
+}
+
+static char *test_a_game_is_played_again_from_the_start(void)
+{
+	game_t game;
+	game_trace_t trace;
+	game_position_t positions[GAME_MAX_HISTORY];
+	game_position_t final;
+	int played;
+
+	toy_game(&game);
+
+	game_play(&game, always_take, NULL, always_take, NULL, &trace);
+
+	played = game_replay(&game, &trace, positions, &final);
+
+	_it_should("have found every position", played == TOY_STONES);
+	_it_should("start again with the whole pile", toy_in(&positions[0])->stones == TOY_STONES);
+	_it_should("have the turn back again", toy_in(&positions[0])->turn == 0);
+	_it_should("end where the game ended", toy_in(&final)->stones == 0);
+
+	return NULL;
+}
+
+static char *test_a_move_that_is_not_allowed_is_refused(void)
+{
+	game_t game;
+	game_position_t position;
+
+	toy_game(&game);
+
+	game.start(&position);
+	game.play(&position, 0);
+	game.play(&position, 0);
+
+	/* a move that is not move zero is not allowed */
+	_it_should("refuse a move that is not there", !game.play(&position, 7));
+	_it_should("leave the pile alone", toy_in(&position)->stones == TOY_STONES - 2);
+
+	return NULL;
+}
+
+static char *test_the_worth_of_a_result(void)
+{
+	_it_should("say a win is worth one", game_worth_of_outcome(GAME_FIRST_WINS, 0) == 1.0);
+	_it_should("say a win is worth nought to the other one",
+		game_worth_of_outcome(GAME_FIRST_WINS, 1) == 0.0);
+	_it_should("say a draw is worth a half", game_worth_of_outcome(GAME_DRAW, 0) == 0.5);
+	_it_should("say a draw is worth a half to the other one too",
+		game_worth_of_outcome(GAME_DRAW, 1) == 0.5);
+	_it_should("say a loss is worth nought", game_worth_of_outcome(GAME_SECOND_WINS, 0) == 0.0);
+	_it_should("say a loss is worth one to the other one",
+		game_worth_of_outcome(GAME_SECOND_WINS, 1) == 1.0);
+
+	return NULL;
+}
+
+static char *test_the_perfect_player_knows_the_game(void)
+{
+	game_t game;
+	oracle_t oracle;
+	game_position_t position;
+
+	toy_game(&game);
+	toy_oracle(&oracle);
+
+	oracle_start(&oracle);
+
+	game.start(&position);
+
+	_it_should("say the first player wins the pile of five",
+		oracle.worth(oracle.state, &position) == 1.0);
+
+	game.play(&position, 0);
+
+	_it_should("say the second player wins the pile of four",
+		oracle.worth(oracle.state, &position) == 0.0);
+
+	_it_should("play the only move there is", oracle.choose(oracle.state, &position) == 0);
+
+	oracle_stop(&oracle);
 
 	return NULL;
 }
 
 static char *run_tests()
 {
-	_run_test(test_a_game_starts_empty);
-	_run_test(test_a_move_places_the_mark);
-	_run_test(test_it_refuses_an_illegal_move);
-	_run_test(test_it_stops_when_someone_wins);
-	_run_test(test_a_full_board_with_no_line_is_a_draw);
-	_run_test(test_o_can_win);
-	_run_test(test_it_records_the_moves);
-	_run_test(test_two_policies_can_play_a_whole_game);
-	_run_test(test_a_game_never_goes_on_for_ever);
+	_run_test(test_a_game_is_played_to_the_end);
+	_run_test(test_the_turn_goes_back_and_forth);
+	_run_test(test_a_game_stops_when_a_side_cannot_move);
+	_run_test(test_a_game_is_played_again_from_the_start);
+	_run_test(test_a_move_that_is_not_allowed_is_refused);
+	_run_test(test_the_worth_of_a_result);
+	_run_test(test_the_perfect_player_knows_the_game);
 
 	return NULL;
 }

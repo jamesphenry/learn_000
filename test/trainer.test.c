@@ -5,7 +5,6 @@
 #include <stdbool.h>
 #include <math.h>
 
-#include "../src/board.c"
 #include "../src/game.c"
 #include "../src/layer.c"
 #include "../src/network.c"
@@ -13,6 +12,11 @@
 #include "../src/policy.c"
 #include "../src/rng.c"
 #include "../src/trainer.c"
+#include "../games/tic-tac-toe/src/board.c"
+#include "../games/tic-tac-toe/src/minimax.c"
+#include "../games/tic-tac-toe/src/tictactoe.c"
+
+static game_t game;
 
 /* A network whose output is a probability, so it answers with the worth of
  * a position. */
@@ -38,57 +42,93 @@ static void build_the_awake_network(network_t *network)
 	network->layers[1].weights[0][0] = 1.0;
 }
 
-/* X takes the top row and wins. */
-static void build_a_won_game(game_t *game)
+/* A trace of the moves that were played, and where the game ended up. */
+static void build_a_trace(game_trace_t *trace, const board_cell_t *moves, int count)
 {
-	game_init(game);
-	game_play_move(game, CELL_TOP_LEFT);
-	game_play_move(game, CELL_CENTER);
-	game_play_move(game, CELL_TOP);
-	game_play_move(game, CELL_MIDDLE_LEFT);
-	game_play_move(game, CELL_TOP_RIGHT);
+	game_position_t position;
+
+	game.start(&position);
+
+	trace->n_offered = 0;
+	trace->n_played = 0;
+
+	for (int i = 0; i < count; i++) {
+		trace->offered[trace->n_offered++] = moves[i];
+		game.play(&position, moves[i]);
+		trace->n_played++;
+	}
+
+	trace->position = position;
 }
 
-/* O takes the middle row and wins. */
-static void build_a_lost_game(game_t *game)
+/* The first player takes the top row and wins. */
+static void build_a_won_game(game_trace_t *trace)
 {
-	game_init(game);
-	game_play_move(game, CELL_TOP_LEFT);
-	game_play_move(game, CELL_CENTER);
-	game_play_move(game, CELL_TOP);
-	game_play_move(game, CELL_MIDDLE_LEFT);
-	game_play_move(game, CELL_BOTTOM_RIGHT);
-	game_play_move(game, CELL_MIDDLE_RIGHT);
+	const board_cell_t moves[] = {
+		CELL_TOP_LEFT, CELL_CENTER, CELL_TOP, CELL_MIDDLE_LEFT, CELL_TOP_RIGHT
+	};
+
+	build_a_trace(trace, moves, 5);
+}
+
+/* The second player takes the middle row and wins. */
+static void build_a_lost_game(game_trace_t *trace)
+{
+	const board_cell_t moves[] = {
+		CELL_TOP_LEFT, CELL_CENTER, CELL_TOP, CELL_MIDDLE_LEFT,
+		CELL_BOTTOM_RIGHT, CELL_MIDDLE_RIGHT
+	};
+
+	build_a_trace(trace, moves, 6);
 }
 
 /* A game that is drawn: neither player gets a line. */
-static void build_a_drawn_game(game_t *game)
+static void build_a_drawn_game(game_trace_t *trace)
 {
-	game_init(game);
-	game_play_move(game, CELL_TOP_LEFT);
-	game_play_move(game, CELL_TOP);
-	game_play_move(game, CELL_TOP_RIGHT);
-	game_play_move(game, CELL_CENTER);
-	game_play_move(game, CELL_MIDDLE_LEFT);
-	game_play_move(game, CELL_MIDDLE_RIGHT);
-	game_play_move(game, CELL_BOTTOM);
-	game_play_move(game, CELL_BOTTOM_LEFT);
-	game_play_move(game, CELL_BOTTOM_RIGHT);
+	const board_cell_t moves[] = {
+		CELL_TOP_LEFT, CELL_TOP, CELL_TOP_RIGHT, CELL_CENTER, CELL_MIDDLE_LEFT,
+		CELL_MIDDLE_RIGHT, CELL_BOTTOM, CELL_BOTTOM_LEFT, CELL_BOTTOM_RIGHT
+	};
+
+	build_a_trace(trace, moves, 9);
+}
+
+/* What the network says about a position. */
+static double worth_of(const network_t *network, const game_position_t *position)
+{
+	double features[GAME_MAX_FEATURES];
+	double worth;
+
+	game.features(position, features);
+	network_forward(network, features, game.n_features, &worth, 1);
+
+	return worth;
 }
 
 /* The worth of the empty board, which is the position the first move was
  * made in. */
 static double worth_of_the_empty_board(const network_t *network)
 {
-	board_t board;
-	double inputs[CELL_COUNT];
-	double worth;
+	game_position_t position;
 
-	board_init(&board);
-	board_to_inputs(&board, inputs);
-	network_forward(network, inputs, CELL_COUNT, &worth, 1);
+	game.start(&position);
 
-	return worth;
+	return worth_of(network, &position);
+}
+
+/*
+ * The worth of the position after a given number of moves, which is the
+ * position the trainer saw at that point in the game.
+ */
+static double worth_after_moves(const network_t *network, const game_trace_t *trace,
+                                int moves)
+{
+	game_position_t positions[GAME_MAX_HISTORY];
+	game_position_t final;
+
+	game_replay(&game, trace, positions, &final);
+
+	return worth_of(network, &positions[moves]);
 }
 
 static char *test_it_refuses_a_null_network(void)
@@ -122,44 +162,25 @@ static char *test_it_refuses_a_network_that_does_not_answer_with_a_probability(v
 	return NULL;
 }
 
-/*
- * The worth of the position after a given number of moves, which is the
- * position the trainer saw at that point in the game.
- */
-static double worth_after_moves(const network_t *network, const game_t *game, int moves)
-{
-	board_t positions[CELL_COUNT];
-	double inputs[CELL_COUNT];
-	double worth;
-
-	game_positions(game, positions);
-	board_to_inputs(&positions[moves], inputs);
-	network_forward(network, inputs, CELL_COUNT, &worth, 1);
-
-	return worth;
-}
-
 static char *test_a_win_raises_the_worth_of_the_position(void)
 {
 	network_t network;
 	trainer_t trainer;
-	game_t game;
+	game_trace_t trace;
 	double before;
 	double after;
 
 	build_the_awake_network(&network);
 	trainer_init(&trainer, &network, 0.1);
-	build_a_won_game(&game);
+	build_a_won_game(&trace);
 
-	before = worth_after_moves(&network, &game, 2);
+	before = worth_after_moves(&network, &trace, 2);
 
-	trainer_train_game(&trainer, &game);
+	trainer_learn_from_outcome(&trainer, &game, &trace);
 
-	/* the position before X's first move was won by X, who was to move in
-	 * it, so it is worth more afterwards */
-	/* the position after two moves was X's to move in and X won it, so it is
-	 * worth more afterwards */
-	after = worth_after_moves(&network, &game, 2);
+	/* the position after two moves was the first player's to move in and
+	 * the first player won it, so it is worth more afterwards */
+	after = worth_after_moves(&network, &trace, 2);
 	_it_should("raise the worth of the position", after > before);
 	_it_should("raise it towards one", after < 1.0);
 
@@ -170,23 +191,21 @@ static char *test_a_loss_lowers_the_worth_of_the_position(void)
 {
 	network_t network;
 	trainer_t trainer;
-	game_t game;
+	game_trace_t trace;
 	double before;
 	double after;
 
 	build_the_awake_network(&network);
 	trainer_init(&trainer, &network, 0.1);
-	build_a_lost_game(&game);
+	build_a_lost_game(&trace);
 
 	before = worth_of_the_empty_board(&network);
 
-	trainer_train_game(&trainer, &game);
+	trainer_learn_from_outcome(&trainer, &game, &trace);
 
-	/* the position before X's first move was lost by X, who was to move in
+	/* the position before the first move was lost by the player to move in
 	 * it, so it is worth less afterwards */
-	/* the position after two moves was X's to move in and X lost it, so it
-	 * is worth less afterwards */
-	after = worth_after_moves(&network, &game, 2);
+	after = worth_after_moves(&network, &trace, 2);
 	_it_should("lower the worth of the position", after < before);
 	_it_should("lower it towards zero", after > 0.0);
 
@@ -197,7 +216,7 @@ static char *test_a_draw_leaves_the_worth_where_it_was(void)
 {
 	network_t network;
 	trainer_t trainer;
-	game_t game;
+	game_trace_t trace;
 	double before;
 	double after;
 
@@ -208,11 +227,11 @@ static char *test_a_draw_leaves_the_worth_where_it_was(void)
 	network.layers[1].biases[0] = -5.0;
 
 	trainer_init(&trainer, &network, 0.1);
-	build_a_drawn_game(&game);
+	build_a_drawn_game(&trace);
 
 	before = worth_of_the_empty_board(&network);
 
-	trainer_train_game(&trainer, &game);
+	trainer_learn_from_outcome(&trainer, &game, &trace);
 
 	after = worth_of_the_empty_board(&network);
 	_it_should("pull the worth towards a half", after > before);
@@ -225,23 +244,23 @@ static char *test_it_learns_a_position_towards_a_target(void)
 {
 	network_t network;
 	trainer_t trainer;
-	board_t board;
+	game_position_t position;
 	double before;
 	double after;
 
 	build_the_test_network(&network);
 	trainer_init(&trainer, &network, 0.1);
-	board_init(&board);
+	game.start(&position);
 
 	before = worth_of_the_empty_board(&network);
 
-	trainer_train_position(&trainer, &board, 1.0);
+	trainer_train_position(&trainer, &game, &position, 1.0);
 
 	after = worth_of_the_empty_board(&network);
 	_it_should("raise the worth towards the target", after > before);
 	_it_should("not go past it", after < 1.0);
 
-	trainer_train_position(&trainer, &board, 0.0);
+	trainer_train_position(&trainer, &game, &position, 0.0);
 
 	_it_should("lower the worth towards the other target",
 		worth_of_the_empty_board(&network) < after);
@@ -259,13 +278,13 @@ static char *test_a_network_with_no_weights_cannot_learn_anything_else(void)
 {
 	network_t network;
 	trainer_t trainer;
-	game_t game;
+	game_trace_t trace;
 
 	build_the_test_network(&network);
 	trainer_init(&trainer, &network, 0.1);
-	build_a_won_game(&game);
+	build_a_won_game(&trace);
 
-	trainer_train_game(&trainer, &game);
+	trainer_learn_from_outcome(&trainer, &game, &trace);
 
 	_it_should("leave the hidden layer dead", network.layers[0].weights[0][0] == 0.0);
 	_it_should("still move the output bias", network.layers[1].biases[0] != 0.0);
@@ -277,22 +296,22 @@ static char *test_the_error_reaches_the_hidden_layer(void)
 {
 	network_t network;
 	trainer_t trainer;
-	game_t game;
+	game_trace_t trace;
 
 	build_the_test_network(&network);
 
 	/* weights of their own, so that the error has something to travel
 	 * through: from the output neuron, through its weight, to the hidden
 	 * value, and on to the hidden weights. The hidden neuron reads the
-	 * cell X took first, so it is awake by the time the top middle is
-	 * played. */
+	 * cell the first player took first, so it is awake by the time the top
+	 * middle is played. */
 	network.layers[0].weights[0][0] = 1.0;
 	network.layers[1].weights[0][0] = 1.0;
 
 	trainer_init(&trainer, &network, 0.1);
-	build_a_won_game(&game);
+	build_a_won_game(&trace);
 
-	trainer_train_game(&trainer, &game);
+	trainer_learn_from_outcome(&trainer, &game, &trace);
 
 	_it_should("change the hidden layer", network.layers[0].weights[0][0] != 1.0);
 	_it_should("move the weight of the output", network.layers[1].weights[0][0] != 1.0);
@@ -308,10 +327,10 @@ static char *test_it_plays_and_learns(void)
 	int played;
 
 	build_the_test_network(&network);
-	policy_init(&policy, &network, 1, 0.5);
+	policy_init(&policy, &game, &network, 1, 0.5);
 	trainer_init(&trainer, &network, 0.1);
 
-	played = trainer_run(&trainer, &policy, 10);
+	played = trainer_run(&trainer, &game, &policy, 10);
 
 	_it_should("play every game", played == 10);
 	_it_should("have changed the network", network.layers[1].biases[0] != 0.0);
@@ -327,7 +346,7 @@ static char *test_it_learns_from_the_position_the_move_was_made_in(void)
 {
 	network_t network;
 	trainer_t trainer;
-	game_t game;
+	game_trace_t trace;
 
 	build_the_test_network(&network);
 
@@ -337,9 +356,9 @@ static char *test_it_learns_from_the_position_the_move_was_made_in(void)
 	network.layers[1].weights[0][0] = 1.0;
 
 	trainer_init(&trainer, &network, 0.1);
-	build_a_won_game(&game);
+	build_a_won_game(&trace);
 
-	trainer_train_game(&trainer, &game);
+	trainer_learn_from_outcome(&trainer, &game, &trace);
 
 	/* the top right was empty in every position the trainer saw, because
 	 * the position after the last move is not one it learns from */
@@ -358,7 +377,7 @@ static char *test_the_activation_stops_the_error(void)
 {
 	network_t network;
 	trainer_t trainer;
-	game_t game;
+	game_trace_t trace;
 
 	build_the_test_network(&network);
 
@@ -371,9 +390,9 @@ static char *test_the_activation_stops_the_error(void)
 	network.layers[1].weights[0][0] = 1.0;
 
 	trainer_init(&trainer, &network, 0.1);
-	build_a_won_game(&game);
+	build_a_won_game(&trace);
 
-	trainer_train_game(&trainer, &game);
+	trainer_learn_from_outcome(&trainer, &game, &trace);
 
 	_it_should("not change a hidden neuron that is switched off",
 		network.layers[0].weights[0][0] == -1.0);
@@ -381,8 +400,44 @@ static char *test_the_activation_stops_the_error(void)
 	return NULL;
 }
 
+/*
+ * The perfect player says what a position is really worth, and the trainer
+ * learns that instead of the result of the game.
+ */
+static char *test_it_learns_from_the_perfect_player(void)
+{
+	network_t network;
+	trainer_t trainer;
+	oracle_t oracle;
+	game_trace_t trace;
+	double before;
+	double after;
+
+	build_the_awake_network(&network);
+	trainer_init(&trainer, &network, 0.1);
+	tictactoe_oracle(&oracle);
+	oracle_start(&oracle);
+	build_a_won_game(&trace);
+
+	before = worth_after_moves(&network, &trace, 2);
+
+	trainer_learn_from_oracle(&trainer, &game, &oracle, &trace);
+
+	/* the position after two moves was won by the player to move in it, so
+	 * the perfect player says it is worth one */
+	after = worth_after_moves(&network, &trace, 2);
+	_it_should("raise the worth of the position", after > before);
+	_it_should("raise it towards one", after < 1.0);
+
+	oracle_stop(&oracle);
+
+	return NULL;
+}
+
 static char *run_tests()
 {
+	tictactoe_game(&game);
+
 	_run_test(test_it_refuses_a_null_network);
 	_run_test(test_it_refuses_a_network_that_does_not_answer_with_a_probability);
 	_run_test(test_a_win_raises_the_worth_of_the_position);
@@ -393,6 +448,7 @@ static char *run_tests()
 	_run_test(test_the_error_reaches_the_hidden_layer);
 	_run_test(test_the_activation_stops_the_error);
 	_run_test(test_it_learns_from_the_position_the_move_was_made_in);
+	_run_test(test_it_learns_from_the_perfect_player);
 	_run_test(test_it_plays_and_learns);
 
 	return NULL;

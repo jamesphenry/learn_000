@@ -3,13 +3,14 @@
 #include "main.h"
 #include "arena.h"
 #include "board.h"
+#include "evaluate.h"
 #include "game.h"
 #include "judge.h"
 #include "minimax.h"
 #include "network.h"
-#include "evaluate.h"
-#include "trainer.h"
 #include "policy.h"
+#include "tictactoe.h"
+#include "trainer.h"
 
 int greet(char *message)
 {
@@ -136,15 +137,15 @@ static void run_the_experiments(void)
  * the top right cell, and O does the opposite, so the two of them end up
  * fighting over it.
  */
-static void play_a_game(void)
+static void play_a_game(const game_t *game)
 {
 	network_t network;
 	policy_t policy;
-	game_t game;
-	game_result_t result;
+	game_trace_t trace;
+	const board_t *board;
 
 	network_init(&network);
-	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_CLAMP);
+	network_add_layer(&network, game->n_features, 2, ACTIVATION_CLAMP);
 	network.layers[0].weights[0][0] = 1.0;
 	network.layers[0].weights[0][1] = 1.0;
 	network.layers[0].weights[1][2] = -1.0;
@@ -154,38 +155,43 @@ static void play_a_game(void)
 	network.layers[1].weights[0][0] = 1.0;
 	network.layers[1].weights[0][1] = -1.0;
 
-	policy_init(&policy, &network, 1, 0.1);
-	result = game_play(&game, &policy, &policy);
+	policy_init(&policy, game, &network, 1, 0.1);
+	game_play(game, policy_choose, &policy, policy_choose, &policy, &trace);
 
-	print_board(&game.board);
+	board = (const board_t *)trace.position.state.bytes;
+	print_board(board);
 
-	printf("%d moves, and the game %s\n", game.moves,
-	       result == GAME_X_WINS ? "went to X" :
-	       result == GAME_O_WINS ? "went to O" : "was drawn");
+	printf("%d moves, and the game %s\n", trace.n_played,
+	       game->outcome(&trace.position) == GAME_FIRST_WINS ? "went to the first player" :
+	       game->outcome(&trace.position) == GAME_SECOND_WINS ? "went to the second player" :
+	       "was drawn");
 }
 
 /*
  * A network that watches the top row, and a game where X takes it and wins.
- * The trainer plays the game over and over, and the chance that X wins by
- * taking the top right cell goes up.
+ * The trainer plays the game over and over, and the chance that the player
+ * to move wins by taking the top right cell goes up.
  */
-static void train_a_network(void)
+static void train_a_network(const game_t *game)
 {
 	network_t network;
 	trainer_t trainer;
-	game_t game;
-	board_t board;
-	double inputs[CELL_COUNT];
+	game_trace_t trace;
+	game_position_t position;
+	double features[GAME_MAX_FEATURES];
 	double before;
 	double after;
+	const game_move_t moves[] = {
+		CELL_TOP_LEFT, CELL_CENTER, CELL_TOP, CELL_MIDDLE_LEFT, CELL_TOP_RIGHT
+	};
 
 	network_init(&network);
-	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_CLAMP);
+	network_add_layer(&network, game->n_features, 2, ACTIVATION_CLAMP);
 	network_add_layer(&network, 2, 1, ACTIVATION_SIGMOID);
 
 	/* the hidden layer watches the two cells on the left of the top row */
 	network.layers[0].weights[0][0] = 1.0;
-	network.layers[0].weights[1][1] = 1.0;
+	network.layers[1].weights[1][1] = 1.0;
 
 	/* and the output reads both of them */
 	network.layers[1].weights[0][0] = 1.0;
@@ -193,30 +199,38 @@ static void train_a_network(void)
 
 	trainer_init(&trainer, &network, 0.1);
 
-	/* the board as it is before the top right is taken */
-	board_init(&board);
-	place_mark(&board, CELL_TOP_LEFT, 'X');
-	place_mark(&board, CELL_TOP, 'X');
-	board_to_inputs(&board, inputs);
-	network_forward(&network, inputs, CELL_COUNT, &before, 1);
+	/* a game where the first player takes the top row and wins */
+	game->start(&position);
 
-	/* a game where X takes the top row and wins */
-	game_init(&game);
-	game_play_move(&game, CELL_TOP_LEFT);
-	game_play_move(&game, CELL_CENTER);
-	game_play_move(&game, CELL_TOP);
-	game_play_move(&game, CELL_MIDDLE_LEFT);
-	game_play_move(&game, CELL_TOP_RIGHT);
+	trace.n_offered = 0;
+	trace.n_played = 0;
+
+	for (int i = 0; i < 5; i++) {
+		trace.offered[trace.n_offered++] = moves[i];
+		game->play(&position, moves[i]);
+		trace.n_played++;
+	}
+
+	trace.position = position;
+
+	/* the position as it is before the top right is taken */
+	game->start(&position);
+	game->play(&position, CELL_TOP_LEFT);
+	game->play(&position, CELL_CENTER);
+	game->play(&position, CELL_TOP);
+	game->features(&position, features);
+	network_forward(&network, features, game->n_features, &before, 1);
 
 	for (int i = 0; i < 20; i++)
-		trainer_train_game(&trainer, &game);
+		trainer_learn_from_outcome(&trainer, game, &trace);
 
-	network_forward(&network, inputs, CELL_COUNT, &after, 1);
+	game->features(&position, features);
+	network_forward(&network, features, game->n_features, &after, 1);
 
 	printf("\nthe position was worth %g, and after training %g\n", before, after);
 }
 
-static void measure_a_network(void)
+static void measure_a_network(const game_t *game, const oracle_t *oracle)
 {
 	network_t network;
 	policy_t policy;
@@ -225,7 +239,7 @@ static void measure_a_network(void)
 	evaluation_t after;
 
 	network_init(&network);
-	network_add_layer(&network, CELL_COUNT, 8, ACTIVATION_RELU);
+	network_add_layer(&network, game->n_features, 8, ACTIVATION_RELU);
 	network_add_layer(&network, 8, 1, ACTIVATION_SIGMOID);
 
 	for (int neuron = 0; neuron < network.layers[0].n_neurons; neuron++) {
@@ -233,12 +247,12 @@ static void measure_a_network(void)
 			network.layers[0].weights[neuron][input] = 0.5;
 	}
 
-	policy_init(&policy, &network, 1, 0.3);
+	policy_init(&policy, game, &network, 1, 0.3);
 	trainer_init(&trainer, &network, 0.05);
 
-	evaluate_network(&network, 1, 200, &before);
-	trainer_run(&trainer, &policy, 1000);
-	evaluate_network(&network, 1, 200, &after);
+	evaluate_network(game, oracle, &network, 1, 200, &before);
+	trainer_run(&trainer, game, &policy, 1000);
+	evaluate_network(game, oracle, &network, 1, 200, &after);
 
 	printf("\nagainst an opponent that plays at random, over %d games\n", after.games);
 	printf("  before training: won %d, drew %d, lost %d, and was out by %g\n",
@@ -246,11 +260,11 @@ static void measure_a_network(void)
 	printf("  after training:  won %d, drew %d, lost %d, and was out by %g\n",
 	       after.wins, after.draws, after.losses, after.brier_score);
 
-	printf("\nwhat it said, and how often X won:\n");
+	printf("\nwhat it said, and how often the player to move won:\n");
 	for (int bucket = 0; bucket < EVALUATION_BUCKETS; bucket++) {
 		if (after.bucket_counts[bucket] == 0) continue;
 
-		printf("  said %g, X won %g of the time, over %d moves\n",
+		printf("  said %g, the mover won %g of the time, over %d moves\n",
 		       after.bucket_predicted[bucket], after.bucket_observed[bucket],
 		       after.bucket_counts[bucket]);
 	}
@@ -285,19 +299,25 @@ static void ask_the_minimax(void)
 /*
  * A referee, looking at a game in which a move was not allowed.
  */
-static void judge_a_game(void)
+static void judge_a_game(const game_t *game, const oracle_t *oracle)
 {
-	game_t game;
+	game_trace_t trace;
 	judgement_t verdict;
+	game_position_t position;
 
-	game_init(&game);
-	game_play_move(&game, CELL_TOP_LEFT);
-	game_play_move(&game, CELL_CENTER);
+	game->start(&position);
+	game->play(&position, CELL_TOP_LEFT);
+	game->play(&position, CELL_CENTER);
 
 	/* the top left is taken, so this one is not allowed */
-	game_play_move(&game, CELL_TOP_LEFT);
+	trace.n_offered = 0;
+	trace.n_played = 0;
+	trace.offered[trace.n_offered++] = CELL_TOP_LEFT;
+	trace.offered[trace.n_offered++] = CELL_CENTER;
+	trace.offered[trace.n_offered++] = CELL_TOP_LEFT;
+	trace.position = position;
 
-	judge_game(&game, &verdict);
+	judge_game(game, oracle, &trace, &verdict);
 
 	printf("\nthe referee looked over a game\n");
 	printf("  %d moves were offered and %d of them were played\n",
@@ -312,7 +332,7 @@ static void judge_a_game(void)
  * and the same number of training steps, and measured on games they have
  * not seen.
  */
-static void run_the_arena(void)
+static void run_the_arena(const game_t *game, const oracle_t *oracle)
 {
 	arena_settings_t settings;
 	arena_survey_t survey;
@@ -327,7 +347,7 @@ static void run_the_arena(void)
 	       settings.training_games, settings.evaluation_games, settings.match_games,
 	       runs);
 
-	if (!arena_survey(&settings, runs, &survey)) {
+	if (!arena_survey(&settings, game, oracle, runs, &survey)) {
 		printf("  the arena could not be run\n");
 		return;
 	}
@@ -398,14 +418,14 @@ static void run_the_arena(void)
 
 /*
  * Two models, each with a seed of its own, and how they fare against each
- * other: before either has learned anything, after each has learned from
- * its own games, and after they have learned against each other.
+ * other: before either of them has learned anything, after each has learned
+ * from its own games, and after they have learned against each other.
  *
  * Neither is taught by the perfect player here. Each learns from the result
  * of the games it plays, which is what a model has to do when there is
  * nobody to tell it the answer.
  */
-static void run_the_duel(void)
+static void run_the_duel(const game_t *game, const oracle_t *oracle)
 {
 	arena_settings_t settings;
 	arena_duel_t duel;
@@ -417,7 +437,7 @@ static void run_the_duel(void)
 	printf("  %d games of training each, %d games when they meet\n\n",
 	       settings.training_games, settings.match_games);
 
-	if (!arena_duel(&settings, 42, 1978, &duel)) {
+	if (!arena_duel(&settings, game, oracle, 42, 1978, &duel)) {
 		printf("  the duel could not be run\n");
 		return;
 	}
@@ -463,7 +483,7 @@ static void run_the_duel(void)
  * out of it, and they do not agree: how well a model learned, how well it
  * did in the league, and how well it did against models of the other kind.
  */
-static void run_the_league(int models)
+static void run_the_league(const game_t *game, const oracle_t *oracle, int models)
 {
 	arena_settings_t settings;
 	arena_league_t league;
@@ -476,7 +496,7 @@ static void run_the_league(int models)
 	printf("  %d models, %d games of training each, %d games a match\n\n",
 	       models, settings.training_games, settings.match_games);
 
-	if (!arena_league(&settings, models, &league)) {
+	if (!arena_league(&settings, game, oracle, models, &league)) {
 		printf("  the league could not be run\n");
 		return;
 	}
@@ -507,35 +527,50 @@ static void run_the_league(int models)
 }
 
 int main(int argc, char *argv[], char *env[]) {
+	game_t game;
+	oracle_t oracle;
+
 	UNUSED(env);
 
 	greet("Hello, World!");
+
+	/* the game the demo plays, and the perfect player that goes with it */
+	tictactoe_game(&game);
+	tictactoe_oracle(&oracle);
+
+	if (!oracle_start(&oracle)) {
+		printf("the perfect player could not be started\n");
+		return EXIT_FAILURE;
+	}
+
 	score_a_game();
 	run_the_experiments();
 
 	printf("\n");
-	play_a_game();
+	play_a_game(&game);
 
 	printf("\n");
-	train_a_network();
+	train_a_network(&game);
 
 	printf("\n");
-	measure_a_network();
+	measure_a_network(&game, &oracle);
 
 	printf("\n");
 	ask_the_minimax();
 
 	printf("\n");
-	judge_a_game();
+	judge_a_game(&game, &oracle);
 
 	printf("\n");
-	run_the_arena();
+	run_the_arena(&game, &oracle);
 
 	printf("\n");
-	run_the_duel();
+	run_the_duel(&game, &oracle);
 
 	printf("\n");
-	run_the_league(argc > 1 ? atoi(argv[1]) : 12);
+	run_the_league(&game, &oracle, argc > 1 ? atoi(argv[1]) : 12);
+
+	oracle_stop(&oracle);
 
 	return EXIT_SUCCESS;
 }

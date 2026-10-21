@@ -4,17 +4,22 @@
 #include "test-runner.h"
 #include <stdbool.h>
 #include <string.h>
+#include <math.h>
 
-#include "../src/board.c"
 #include "../src/evaluate.c"
 #include "../src/game.c"
 #include "../src/judge.c"
-#include "../src/minimax.c"
 #include "../src/layer.c"
 #include "../src/network.c"
 #include "../src/neuron.c"
 #include "../src/policy.c"
 #include "../src/rng.c"
+#include "../games/tic-tac-toe/src/board.c"
+#include "../games/tic-tac-toe/src/minimax.c"
+#include "../games/tic-tac-toe/src/tictactoe.c"
+
+static game_t game;
+static oracle_t oracle;
 
 static bool nearly_equal(double actual, double expected)
 {
@@ -38,9 +43,9 @@ static char *test_it_refuses_bad_arguments(void)
 
 	build_the_test_network(&network);
 
-	_it_should("refuse a null network", !evaluate_network(NULL, 1, 10, &result));
-	_it_should("refuse a null result", !evaluate_network(&network, 1, 10, NULL));
-	_it_should("refuse no games", !evaluate_network(&network, 1, 0, &result));
+	_it_should("refuse a null network", !evaluate_network(&game, &oracle, NULL, 1, 10, &result));
+	_it_should("refuse a null result", !evaluate_network(&game, &oracle, &network, 1, 10, NULL));
+	_it_should("refuse no games", !evaluate_network(&game, &oracle, &network, 1, 0, &result));
 
 	return NULL;
 }
@@ -52,17 +57,17 @@ static char *test_it_counts_the_games(void)
 
 	build_the_test_network(&network);
 
-	evaluate_network(&network, 1, 40, &result);
+	evaluate_network(&game, &oracle, &network, 1, 40, &result);
 
 	_it_should("count the games", result.games == 40);
 	_it_should("count every game once",
 		result.wins + result.draws + result.losses == 40);
-	_it_should("take each colour the same number of times",
-		result.as_x == result.as_o && result.as_x == 20);
-	_it_should("count the wins in each colour",
-		result.wins == result.wins_as_x + result.wins_as_o);
-	_it_should("count the games X won",
-		result.x_wins + result.games - result.x_wins == result.games);
+	_it_should("take each side the same number of times",
+		result.as_first == result.as_second && result.as_first == 20);
+	_it_should("count the wins in each side",
+		result.wins == result.wins_as_first + result.wins_as_second);
+	_it_should("count the games the first player won",
+		result.first_wins + result.games - result.first_wins == result.games);
 	_it_should("count the moves that were played", result.moves > 0);
 	_it_should("win some of the games", result.wins > 0);
 	_it_should("lose some of the games", result.losses > 0);
@@ -78,7 +83,7 @@ static char *test_an_untrained_network_says_a_half(void)
 
 	build_the_test_network(&network);
 
-	evaluate_network(&network, 1, 40, &result);
+	evaluate_network(&game, &oracle, &network, 1, 40, &result);
 
 	for (int bucket = 0; bucket < EVALUATION_BUCKETS; bucket++)
 		moves += result.bucket_counts[bucket];
@@ -99,8 +104,8 @@ static char *test_an_untrained_network_says_a_half(void)
 
 	/* a half against a result of one or zero is a quarter out, and a half
 	 * against a draw is not out at all */
-	int lost = result.moves - result.moves_in_x_wins - result.moves_in_draws;
-	double expected_brier = 0.25 * (result.moves_in_x_wins + lost) / result.moves;
+	int lost = result.moves - result.moves_in_first_wins - result.moves_in_draws;
+	double expected_brier = 0.25 * (result.moves_in_first_wins + lost) / result.moves;
 
 	_it_should("be a quarter out of every win and every loss",
 		nearly_equal(result.brier_score, expected_brier));
@@ -115,7 +120,7 @@ static char *test_the_buckets_hold_the_observations(void)
 
 	build_the_test_network(&network);
 
-	evaluate_network(&network, 1, 40, &result);
+	evaluate_network(&game, &oracle, &network, 1, 40, &result);
 
 	for (int bucket = 0; bucket < EVALUATION_BUCKETS; bucket++) {
 		if (result.bucket_counts[bucket] == 0) continue;
@@ -140,8 +145,8 @@ static char *test_the_same_seed_gives_the_same_result(void)
 
 	build_the_test_network(&network);
 
-	evaluate_network(&network, 99, 30, &first);
-	evaluate_network(&network, 99, 30, &second);
+	evaluate_network(&game, &oracle, &network, 99, 30, &first);
+	evaluate_network(&game, &oracle, &network, 99, 30, &second);
 
 	_it_should("give the same wins", first.wins == second.wins);
 	_it_should("give the same draws", first.draws == second.draws);
@@ -175,34 +180,37 @@ static double expected_truth_error(network_t *network)
 {
 	policy_t network_policy;
 	policy_t random_policy;
-	minimax_t oracle;
+	game_trace_t trace;
 	double total = 0.0;
 	int moves = 0;
 
-	minimax_init(&oracle);
-	policy_init(&network_policy, network, 1, 0.0);
-	policy_init(&random_policy, network, 2, INFINITY);
+	policy_init(&network_policy, &game, network, 1, 0.0);
+	policy_init(&random_policy, &game, network, 2, INFINITY);
 
 	for (int i = 0; i < 40; i++) {
-		game_t played;
-		board_t positions[CELL_COUNT];
-		double inputs[CELL_COUNT];
-		double worth;
+		game_position_t positions[GAME_MAX_HISTORY];
+		game_position_t final;
+		int played;
 
-		/* the network takes one colour and then the other, as it does in
+		/* the network takes one side and then the other, as it does in
 		 * the measurement */
 		if (i % 2 == 0)
-			game_play(&played, &network_policy, &random_policy);
+			game_play(&game, policy_choose, &network_policy, policy_choose,
+			          &random_policy, &trace);
 		else
-			game_play(&played, &random_policy, &network_policy);
+			game_play(&game, policy_choose, &random_policy, policy_choose,
+			          &network_policy, &trace);
 
-		game_positions(&played, positions);
+		played = game_replay(&game, &trace, positions, &final);
 
-		for (int step = 0; step < played.moves; step++) {
-			board_to_inputs(&positions[step], inputs);
-			network_forward(network, inputs, CELL_COUNT, &worth, 1);
+		for (int step = 0; step < played; step++) {
+			double features[GAME_MAX_FEATURES];
+			double worth;
 
-			total += fabs(worth - minimax_worth(&oracle, &positions[step]));
+			game.features(&positions[step], features);
+			network_forward(network, features, game.n_features, &worth, 1);
+
+			total += fabs(worth - oracle.worth(oracle.state, &positions[step]));
 			moves++;
 		}
 	}
@@ -217,7 +225,7 @@ static char *test_the_truth_error_is_measured_against_the_perfect_player(void)
 
 	build_the_test_network(&network);
 
-	evaluate_network(&network, 1, 40, &result);
+	evaluate_network(&game, &oracle, &network, 1, 40, &result);
 
 	/* the network says a half for every cell, so it is out by a half
 	 * wherever the position was worth something else, and by nothing at
@@ -234,7 +242,7 @@ static char *test_the_truth_error_is_measured_against_the_perfect_player(void)
 	evaluation_t varying_result;
 
 	build_the_varying_network(&varying);
-	evaluate_network(&varying, 1, 40, &varying_result);
+	evaluate_network(&game, &oracle, &varying, 1, 40, &varying_result);
 
 	_it_should("measure the worth of every position",
 		nearly_equal(varying_result.truth_error, expected_truth_error(&varying)));
@@ -244,12 +252,14 @@ static char *test_the_truth_error_is_measured_against_the_perfect_player(void)
 
 /*
  * A network that plays the cells in a fixed order, so that the game it
- * plays is the same every time and can be worked out by hand. X plays the
- * cell at the top of the order and O the one at the bottom, so the game is
+ * plays is the same every time and can be worked out by hand. The first
+ * player plays the cell at the top of the order and the other one the cell at
+ * the bottom, so the game is
  *
- *   X plays 0, O plays 8, X plays 1, O plays 7, X plays 2
+ *   the first player plays 0, the other plays 8, the first plays 1, the other
+ *   plays 7, the first plays 2
  *
- * and X has the top row and wins.
+ * and the first player has the top row and wins.
  */
 static void build_the_ordered_network(network_t *network)
 {
@@ -277,7 +287,7 @@ static char *test_a_network_that_has_learned_nothing_yet(void)
 	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_RELU);
 	network_add_layer(&network, 2, 1, ACTIVATION_SIGMOID);
 
-	_it_should("look at it", evaluate_initialisation(&network, &start));
+	_it_should("look at it", evaluate_initialisation(&game, &network, &start));
 
 	_it_should("see no sums at all in the hidden layer",
 		nearly_equal(start.hidden_lowest, 0.0) && nearly_equal(start.hidden_highest, 0.0));
@@ -303,7 +313,7 @@ static char *test_a_network_with_every_weight_the_same(void)
 	network_add_layer(&network, 16, 1, ACTIVATION_SIGMOID);
 	network_fill_maximum(&network, 1.0);
 
-	_it_should("look at it", evaluate_initialisation(&network, &start));
+	_it_should("look at it", evaluate_initialisation(&game, &network, &start));
 
 	/* every hidden unit sees exactly the same thing */
 	_it_should("see the same sum everywhere in the hidden layer",
@@ -330,8 +340,9 @@ static char *test_the_initialisation_refuses_bad_arguments(void)
 
 	build_the_test_network(&network);
 
-	_it_should("refuse a null network", !evaluate_initialisation(NULL, &start));
-	_it_should("refuse nowhere to put the result", !evaluate_initialisation(&network, NULL));
+	_it_should("refuse a null network", !evaluate_initialisation(&game, NULL, &start));
+	_it_should("refuse nowhere to put the result",
+		!evaluate_initialisation(&game, &network, NULL));
 
 	return NULL;
 }
@@ -343,9 +354,12 @@ static char *test_the_skill_measurement_refuses_bad_arguments(void)
 
 	build_the_ordered_network(&network);
 
-	_it_should("refuse a null network", !evaluate_skill(NULL, 1, 10, 0.0, &skill));
-	_it_should("refuse a null result", !evaluate_skill(&network, 1, 10, 0.0, NULL));
-	_it_should("refuse no games", !evaluate_skill(&network, 1, 0, 0.0, &skill));
+	_it_should("refuse a null network",
+		!evaluate_skill(&game, &oracle, NULL, 1, 10, 0.0, &skill));
+	_it_should("refuse a null result",
+		!evaluate_skill(&game, &oracle, &network, 1, 10, 0.0, NULL));
+	_it_should("refuse no games",
+		!evaluate_skill(&game, &oracle, &network, 1, 0, 0.0, &skill));
 
 	return NULL;
 }
@@ -357,7 +371,7 @@ static char *test_the_skill_measurement_counts_the_moves(void)
 
 	build_the_ordered_network(&network);
 
-	evaluate_skill(&network, 1, 10, 0.0, &skill);
+	evaluate_skill(&game, &oracle, &network, 1, 10, 0.0, &skill);
 
 	/* the game is over after seven moves, and it is the same game every
 	 * time, so ten games are seventy moves */
@@ -376,30 +390,30 @@ static char *test_the_skill_measurement_says_what_was_given_away(void)
 
 	build_the_ordered_network(&network);
 
-	evaluate_skill(&network, 1, 10, 0.0, &skill);
+	evaluate_skill(&game, &oracle, &network, 1, 10, 0.0, &skill);
 
 	/* the seven moves of the game, and what each one gave away:
 	 *
-	 *   X plays 0, from a position worth nothing, and it is still worth
-	 *     nothing: nothing given away
-	 *   O plays 1, from a position worth nothing, and now X is winning:
-	 *     one given away
-	 *   X plays 2, from a position worth a win, and it is now a draw:
-	 *     one given away, and it was a win that was thrown away
-	 *   O plays 3, from a position worth nothing, and now X is winning:
-	 *     one given away
-	 *   X plays 4, from a position worth a win, and it is still a win:
-	 *     nothing given away
-	 *   O plays 5, from a position worth a loss, and it is still a loss:
-	 *     nothing given away
-	 *   X plays 6, from a position worth a win, and it is still a win:
-	 *     nothing given away
+	 *   the first player plays 0, from a position worth nothing, and it is
+	 *     still worth nothing: nothing given away
+	 *   the other player plays 1, from a position worth nothing, and now the
+	 *     first player is winning: half given away
+	 *   the first player plays 2, from a position worth a win, and it is now
+	 *     a draw: half given away, and it was a win that was thrown away
+	 *   the other player plays 3, from a position worth nothing, and now the
+	 *     first player is winning: half given away
+	 *   the first player plays 4, from a position worth a win, and it is
+	 *     still a win: nothing given away
+	 *   the other player plays 5, from a position worth a loss, and it is
+	 *     still a loss: nothing given away
+	 *   the first player plays 6, from a position worth a win, and it is
+	 *     still a win: nothing given away
 	 */
 	_it_should("keep the value four times in each game", skill.kept == 40);
 	_it_should("give value away three times in each game", skill.gave_away == 30);
 	_it_should("throw one win away in each game", skill.threw_wins == 10);
-	_it_should("give three points of value away in each game",
-		nearly_equal(skill.value_lost, 30.0));
+	_it_should("give a point and a half of value away in each game",
+		nearly_equal(skill.value_lost, 15.0));
 
 	return NULL;
 }
@@ -416,8 +430,8 @@ static char *test_the_skill_measurement_against_a_random_player(void)
 
 	build_the_ordered_network(&network);
 
-	evaluate_skill(&network, 1, 10, 0.0, &own);
-	evaluate_skill(&network, 1, 10, INFINITY, &skill);
+	evaluate_skill(&game, &oracle, &network, 1, 10, 0.0, &own);
+	evaluate_skill(&game, &oracle, &network, 1, 10, INFINITY, &skill);
 
 	_it_should("play some games", skill.moves > 0);
 	_it_should("count every move once",
@@ -427,16 +441,16 @@ static char *test_the_skill_measurement_against_a_random_player(void)
 	_it_should("reach different positions than it does on its own",
 		skill.moves != own.moves || skill.value_lost != own.value_lost);
 
-	/* the network takes one colour and then the other, so it is measured
+	/* the network takes one side and then the other, so it is measured
 	 * playing both sides. These are the numbers that comes to: with the
-	 * colours the other way round the measurement is a different one, and
-	 * it says 65 moves, 34 kept and 43 worth given away */
+	 * sides the other way round the measurement is a different one, and it
+	 * says 65 moves, 34 kept and 20 points of value given away */
 	_it_should("count the moves it played", skill.moves == 62);
 	_it_should("count the moves that kept the value", skill.kept == 33);
 	_it_should("count the moves that gave value away", skill.gave_away == 29);
 	_it_should("count the wins it threw away", skill.threw_wins == 15);
 	_it_should("count the value it gave away",
-		nearly_equal(skill.value_lost, 40.0));
+		nearly_equal(skill.value_lost, 20.0));
 
 	return NULL;
 }
@@ -448,27 +462,31 @@ static char *test_the_games_against_the_perfect_player(void)
 
 	build_the_ordered_network(&network);
 
-	evaluate_against_perfect(&network, 1, 10, &result);
+	evaluate_against_perfect(&game, &oracle, &network, 1, 10, &result);
 
 	_it_should("count the games", result.games == 10);
 	_it_should("count every game once",
 		result.wins + result.draws + result.losses == 10);
 
-	/* the network takes X in five of the games and O in five, and it
-	 * plays the same cells whatever the opponent does, so the perfect
-	 * player beats it every time */
+	/* the network takes the first side in five of the games and the other
+	 * side in five, and it plays the same cells whatever the opponent does,
+	 * so the perfect player beats it every time */
 	_it_should("lose every game", result.losses == 10);
 	_it_should("win none", result.wins == 0);
 	_it_should("draw none", result.draws == 0);
-	_it_should("take each colour five times",
-		result.as_x == 5 && result.as_o == 5);
-	_it_should("win no game it played as X", result.wins_as_x == 0);
+	_it_should("take each side five times",
+		result.as_first == 5 && result.as_second == 5);
+	_it_should("win no game it played first", result.wins_as_first == 0);
 
 	return NULL;
 }
 
 static char *run_tests()
 {
+	tictactoe_game(&game);
+	tictactoe_oracle(&oracle);
+	oracle_start(&oracle);
+
 	_run_test(test_it_refuses_bad_arguments);
 	_run_test(test_it_counts_the_games);
 	_run_test(test_an_untrained_network_says_a_half);
@@ -483,6 +501,8 @@ static char *run_tests()
 	_run_test(test_the_skill_measurement_says_what_was_given_away);
 	_run_test(test_the_skill_measurement_against_a_random_player);
 	_run_test(test_the_games_against_the_perfect_player);
+
+	oracle_stop(&oracle);
 
 	return NULL;
 }

@@ -1,87 +1,99 @@
+#include <string.h>
 #include "game.h"
 
-void game_init(game_t *game)
+bool oracle_start(oracle_t *oracle)
 {
-	board_init(&game->board);
-	game->moves = 0;
-	game->attempt_count = 0;
+	if (oracle == NULL) return false;
+	if (oracle->make_state == NULL) return false;
+
+	oracle->state = oracle->make_state();
+
+	return oracle->state != NULL;
 }
 
-char game_turn(const game_t *game)
+void oracle_stop(oracle_t *oracle)
 {
-	return game->board.current_player;
+	if (oracle == NULL) return;
+
+	if (oracle->state != NULL && oracle->free_state != NULL)
+		oracle->free_state(oracle->state);
+
+	oracle->state = NULL;
 }
 
-bool game_play_move(game_t *game, board_cell_t cell)
+bool game_play(const game_t *game, game_chooser_t first, void *first_context,
+               game_chooser_t second, void *second_context, game_trace_t *trace)
 {
-	/* the move is written down whether it was allowed or not, so that a
-	 * referee can see it */
-	if (game->attempt_count < GAME_MAX_ATTEMPTS)
-		game->attempts[game->attempt_count] = cell;
-	game->attempt_count++;
+	game_position_t position;
 
-	if (game_is_over(game)) return false;
+	if (game == NULL || trace == NULL) return false;
 
-	if (!place_mark(&game->board, cell, game->board.current_player))
-		return false;
+	game->start(&position);
 
-	game->history[game->moves] = cell;
-	game->moves++;
-	game->board.current_player = (game->board.current_player == 'X') ? 'O' : 'X';
+	trace->n_offered = 0;
+	trace->n_played = 0;
+
+	while (!game->over(&position) && trace->n_offered < GAME_MAX_HISTORY) {
+		game_move_t move;
+		int turn = game->to_move(&position);
+
+		/* the game says whose turn it is, so a game where the same player
+		 * keeps playing, like Nim, needs no special case here */
+		if (turn == 0) {
+			if (first == NULL) break;
+
+			move = first(first_context, &position);
+		} else {
+			if (second == NULL) break;
+
+			move = second(second_context, &position);
+		}
+
+		if (move < 0) break;
+
+		trace->offered[trace->n_offered++] = move;
+
+		/* a move that is not allowed ends the game, but it is still on
+		 * the record, so that a referee can see it */
+		if (!game->play(&position, move)) break;
+
+		trace->n_played++;
+	}
+
+	trace->position = position;
 
 	return true;
 }
 
-bool game_is_over(const game_t *game)
+int game_replay(const game_t *game, const game_trace_t *trace,
+                game_position_t positions[GAME_MAX_HISTORY], game_position_t *final)
 {
-	if (detect_win(&game->board, 'X')) return true;
-	if (detect_win(&game->board, 'O')) return true;
+	game_position_t position;
+	int played = 0;
 
-	return board_is_full(&game->board);
-}
+	if (game == NULL || trace == NULL || positions == NULL) return 0;
 
-game_result_t game_result(const game_t *game)
-{
-	if (detect_win(&game->board, 'X')) return GAME_X_WINS;
-	if (detect_win(&game->board, 'O')) return GAME_O_WINS;
+	game->start(&position);
 
-	return GAME_DRAW;
-}
+	for (int step = 0; step < trace->n_offered; step++) {
+		game_position_t before = position;
 
-game_result_t game_play(game_t *game, policy_t *x_policy, policy_t *o_policy)
-{
-	game_init(game);
+		if (!game->play(&position, trace->offered[step])) break;
+		if (played >= GAME_MAX_HISTORY) break;
 
-	while (!game_is_over(game)) {
-		policy_t *policy = (game_turn(game) == 'X') ? x_policy : o_policy;
-		board_cell_t move;
-
-		if (!policy_select_move(policy, &game->board, &move)) break;
-
-		game_play_move(game, move);
+		positions[played++] = before;
 	}
 
-	return game_result(game);
+	if (final != NULL) *final = position;
+
+	return played;
 }
 
-double game_worth_of_result(char player_to_move, game_result_t outcome)
+double game_worth_of_outcome(game_outcome_t outcome, int player)
 {
 	if (outcome == GAME_DRAW) return 0.5;
 
-	if ((outcome == GAME_X_WINS) == (player_to_move == 'X')) return 1.0;
+	if ((outcome == GAME_FIRST_WINS) == (player == 0)) return 1.0;
 
 	return 0.0;
-}
-
-void game_positions(const game_t *game, board_t positions[CELL_COUNT])
-{
-	game_t replay;
-
-	game_init(&replay);
-
-	for (int step = 0; step < game->moves; step++) {
-		positions[step] = replay.board;
-
-		if (!game_play_move(&replay, game->history[step])) break;
-	}
 }

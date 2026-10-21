@@ -3,7 +3,6 @@
 #include "arena.h"
 #include "evaluate.h"
 #include "game.h"
-#include "minimax.h"
 #include "policy.h"
 #include "trainer.h"
 
@@ -25,12 +24,13 @@ void arena_settings_init(arena_settings_t *settings)
 }
 
 /* Builds the network, and starts it off in the way that was asked for. */
-static bool arena_build(network_t *network, const arena_settings_t *settings,
-                        init_scheme_t scheme, rng_t *rng)
+static bool arena_build(const game_t *game, network_t *network,
+                        const arena_settings_t *settings, init_scheme_t scheme, rng_t *rng)
 {
 	network_init(network);
 
-	if (!network_add_layer(network, CELL_COUNT, settings->hidden_neurons, ACTIVATION_RELU))
+	if (!network_add_layer(network, game->n_features, settings->hidden_neurons,
+	                       ACTIVATION_RELU))
 		return false;
 
 	if (!network_add_layer(network, settings->hidden_neurons, 1, ACTIVATION_SIGMOID))
@@ -56,24 +56,17 @@ static bool arena_build(network_t *network, const arena_settings_t *settings,
  * games are its own, so the positions are the ones it visits, and the
  * perfect player says what each of them is worth.
  */
-static int arena_learn_from_the_truth(trainer_t *trainer, policy_t *policy, int games)
+static int arena_learn_from_the_truth(trainer_t *trainer, const game_t *game,
+                                      const oracle_t *oracle, policy_t *policy, int games)
 {
-	game_t game;
-	board_t positions[CELL_COUNT];
-	minimax_t oracle;
+	game_trace_t trace;
 	int learned = 0;
 
-	minimax_init(&oracle);
-
 	for (int i = 0; i < games; i++) {
-		game_play(&game, policy, policy);
-		game_positions(&game, positions);
+		if (!game_play(game, policy_choose, policy, policy_choose, policy, &trace))
+			break;
 
-		for (int step = 0; step < game.moves; step++) {
-			if (!trainer_train_position(trainer, &positions[step],
-			                            minimax_worth(&oracle, &positions[step])))
-				return learned;
-		}
+		if (!trainer_learn_from_oracle(trainer, game, oracle, &trace)) break;
 
 		learned++;
 	}
@@ -91,18 +84,20 @@ typedef struct {
 
 /* Measures a model: how it does against an opponent that plays at random,
  * how much worth it gives away, and how it does against the perfect player. */
-static void arena_measure(const arena_settings_t *settings, const network_t *network,
+static void arena_measure(const arena_settings_t *settings, const game_t *game,
+                           const oracle_t *oracle, const network_t *network,
                            arena_look_t *look)
 {
 	memset(look, 0, sizeof(*look));
 
-	evaluate_network(network, settings->evaluation_seed, settings->evaluation_games,
-	                 &look->evaluation);
-	evaluate_skill(network, settings->evaluation_seed, settings->evaluation_games,
-	               POLICY_RANDOM_TEMPERATURE, &look->skill);
-	evaluate_skill(network, settings->evaluation_seed, settings->evaluation_games,
-	               0.0, &look->own_skill);
-	evaluate_against_perfect(network, settings->evaluation_seed,
+	evaluate_network(game, oracle, network, settings->evaluation_seed,
+	                 settings->evaluation_games, &look->evaluation);
+	evaluate_skill(game, oracle, network, settings->evaluation_seed,
+	               settings->evaluation_games, POLICY_RANDOM_TEMPERATURE,
+	               &look->skill);
+	evaluate_skill(game, oracle, network, settings->evaluation_seed,
+	               settings->evaluation_games, 0.0, &look->own_skill);
+	evaluate_against_perfect(game, oracle, network, settings->evaluation_seed,
 	                         settings->evaluation_games, &look->perfect);
 }
 
@@ -134,7 +129,8 @@ static void arena_result_of(const arena_look_t *before, const arena_look_t *afte
  * games it learns from and the games it is measured with are apart from one
  * another, so the measurement is on games the model has not seen.
  */
-static bool arena_train_one(const arena_settings_t *settings, init_scheme_t scheme,
+static bool arena_train_one(const arena_settings_t *settings, const game_t *game,
+                             const oracle_t *oracle, init_scheme_t scheme,
                              rng_t *rng, network_t *network, arena_result_t *result)
 {
 	policy_t policy;
@@ -143,36 +139,37 @@ static bool arena_train_one(const arena_settings_t *settings, init_scheme_t sche
 	arena_look_t after;
 	int trained;
 
-	if (!arena_build(network, settings, scheme, rng)) return false;
+	if (!arena_build(game, network, settings, scheme, rng)) return false;
 
 	/* what the model is like before it has learned anything */
-	arena_measure(settings, network, &before);
-	evaluate_initialisation(network, &result->initialisation);
+	arena_measure(settings, game, oracle, network, &before);
+	evaluate_initialisation(game, network, &result->initialisation);
 
 	/* and then it learns */
 	trainer_init(&trainer, network, settings->learning_rate);
-	policy_init(&policy, network, settings->training_seed, settings->temperature);
+	policy_init(&policy, game, network, settings->training_seed, settings->temperature);
 
 	if (settings->learning == ARENA_LEARN_TRUTH)
-		trained = arena_learn_from_the_truth(&trainer, &policy, settings->training_games);
+		trained = arena_learn_from_the_truth(&trainer, game, oracle, &policy,
+		                                    settings->training_games);
 	else
-		trained = trainer_run(&trainer, &policy, settings->training_games);
+		trained = trainer_run(&trainer, game, &policy, settings->training_games);
 
 	/* and what it is like afterwards, on games it has not seen */
-	arena_measure(settings, network, &after);
+	arena_measure(settings, game, oracle, network, &after);
 
 	arena_result_of(&before, &after, trained, result);
 
 	return true;
 }
 
-bool arena_run(const arena_settings_t *settings, init_scheme_t scheme,
-               arena_result_t *result)
+bool arena_run(const arena_settings_t *settings, const game_t *game,
+               const oracle_t *oracle, init_scheme_t scheme, arena_result_t *result)
 {
 	network_t network;
 	rng_t rng;
 
-	if (settings == NULL || result == NULL) return false;
+	if (settings == NULL || game == NULL || oracle == NULL || result == NULL) return false;
 	if (settings->training_games < 0 || settings->evaluation_games < 1) return false;
 	if (settings->hidden_neurons < 1) return false;
 
@@ -180,15 +177,16 @@ bool arena_run(const arena_settings_t *settings, init_scheme_t scheme,
 
 	rng_seed(&rng, settings->training_seed);
 
-	return arena_train_one(settings, scheme, &rng, &network, result);
+	return arena_train_one(settings, game, oracle, scheme, &rng, &network, result);
 }
 
-bool arena_run_all(const arena_settings_t *settings, arena_report_t *report)
+bool arena_run_all(const arena_settings_t *settings, const game_t *game,
+                   const oracle_t *oracle, arena_report_t *report)
 {
 	network_t networks[ARENA_SCHEMES];
 	rng_t rng;
 
-	if (settings == NULL || report == NULL) return false;
+	if (settings == NULL || game == NULL || oracle == NULL || report == NULL) return false;
 	if (settings->training_games < 0 || settings->evaluation_games < 1) return false;
 	if (settings->match_games < 1) return false;
 	if (settings->hidden_neurons < 1) return false;
@@ -201,16 +199,16 @@ bool arena_run_all(const arena_settings_t *settings, arena_report_t *report)
 	/* every model is given the same conditions, and the only thing that
 	 * differs between them is how they were started off */
 	for (int scheme = 0; scheme < ARENA_SCHEMES; scheme++) {
-		if (!arena_train_one(settings, (init_scheme_t)scheme, &rng, &networks[scheme],
-		                     &report->results[scheme]))
+		if (!arena_train_one(settings, game, oracle, (init_scheme_t)scheme, &rng,
+		                     &networks[scheme], &report->results[scheme]))
 			return false;
 	}
 
-	/* and then they play each other, each of them taking one colour and
+	/* and then they play each other, each of them taking one side and
 	 * then the other */
 	for (int first = 0; first < ARENA_SCHEMES; first++) {
 		for (int second = first + 1; second < ARENA_SCHEMES; second++) {
-			if (!evaluate_against(&networks[first], &networks[second],
+			if (!evaluate_against(game, oracle, &networks[first], &networks[second],
 			                      settings->evaluation_seed, settings->match_games,
 			                      0.0, &report->matches[first][second]))
 				return false;
@@ -255,7 +253,8 @@ static int arena_winner_of_the_round_robin(const arena_report_t *report)
 }
 
 /* Fills in what the two models were like at one stage of a duel. */
-static void arena_stage(const arena_settings_t *settings, const network_t *first,
+static void arena_stage(const arena_settings_t *settings, const game_t *game,
+                        const oracle_t *oracle, const network_t *first,
                         const arena_look_t *first_look, const network_t *second,
                         const arena_look_t *second_look, arena_stage_result_t *stage)
 {
@@ -270,23 +269,24 @@ static void arena_stage(const arena_settings_t *settings, const network_t *first
 	stage->perfect_losses[0] = first_look->perfect.losses;
 	stage->perfect_losses[1] = second_look->perfect.losses;
 
-	evaluate_against(first, second, settings->evaluation_seed, settings->match_games,
-	                 0.0, &stage->meeting);
+	evaluate_against(game, oracle, first, second, settings->evaluation_seed,
+	                 settings->match_games, 0.0, &stage->meeting);
 }
 
 /*
  * Plays a game between the two models and tallies it.
  */
-static void arena_tally_a_game(const game_t *game, int first_is_x, match_result_t *tally)
+static void arena_tally_a_game(const game_t *game, const game_trace_t *trace,
+                               int first_is_first, match_result_t *tally)
 {
-	game_result_t outcome = game_result(game);
+	game_outcome_t outcome = game->outcome(&trace->position);
 
 	if (outcome == GAME_DRAW) {
 		tally->draws++;
-	} else if ((outcome == GAME_X_WINS) == (first_is_x != 0)) {
+	} else if ((outcome == GAME_FIRST_WINS) == (first_is_first != 0)) {
 		tally->first_wins++;
 
-		if (first_is_x) tally->first_wins_as_x++;
+		if (first_is_first) tally->first_wins_as_first++;
 	} else {
 		tally->second_wins++;
 	}
@@ -294,7 +294,8 @@ static void arena_tally_a_game(const game_t *game, int first_is_x, match_result_
 	tally->games++;
 }
 
-bool arena_duel(const arena_settings_t *settings, unsigned long long first_seed,
+bool arena_duel(const arena_settings_t *settings, const game_t *game,
+                const oracle_t *oracle, unsigned long long first_seed,
                 unsigned long long second_seed, arena_duel_t *duel)
 {
 	network_t first;
@@ -310,7 +311,7 @@ bool arena_duel(const arena_settings_t *settings, unsigned long long first_seed,
 	rng_t first_rng;
 	rng_t second_rng;
 
-	if (settings == NULL || duel == NULL) return false;
+	if (settings == NULL || game == NULL || oracle == NULL || duel == NULL) return false;
 	if (settings->training_games < 0 || settings->evaluation_games < 1) return false;
 	if (settings->match_games < 1) return false;
 	if (settings->hidden_neurons < 1) return false;
@@ -321,57 +322,59 @@ bool arena_duel(const arena_settings_t *settings, unsigned long long first_seed,
 	rng_seed(&first_rng, first_seed);
 	rng_seed(&second_rng, second_seed);
 
-	if (!arena_build(&first, settings, INIT_RANDOM, &first_rng)) return false;
-	if (!arena_build(&second, settings, INIT_RANDOM, &second_rng)) return false;
+	if (!arena_build(game, &first, settings, INIT_RANDOM, &first_rng)) return false;
+	if (!arena_build(game, &second, settings, INIT_RANDOM, &second_rng)) return false;
 
-	arena_measure(settings, &first, &first_before);
-	arena_measure(settings, &second, &second_before);
-	evaluate_initialisation(&first, &duel->stages[DUEL_BEFORE].initialisation[0]);
-	evaluate_initialisation(&second, &duel->stages[DUEL_BEFORE].initialisation[1]);
+	arena_measure(settings, game, oracle, &first, &first_before);
+	arena_measure(settings, game, oracle, &second, &second_before);
+	evaluate_initialisation(game, &first, &duel->stages[DUEL_BEFORE].initialisation[0]);
+	evaluate_initialisation(game, &second, &duel->stages[DUEL_BEFORE].initialisation[1]);
 
 	/* and how they fare against each other before either has learned
 	 * anything */
-	arena_stage(settings, &first, &first_before, &second, &second_before,
+	arena_stage(settings, game, oracle, &first, &first_before, &second, &second_before,
 	            &duel->stages[DUEL_BEFORE]);
 
 	/* each of them learns from the games it plays against itself */
 	trainer_init(&first_trainer, &first, settings->learning_rate);
 	trainer_init(&second_trainer, &second, settings->learning_rate);
-	policy_init(&first_policy, &first, first_seed, settings->temperature);
-	policy_init(&second_policy, &second, second_seed, settings->temperature);
+	policy_init(&first_policy, game, &first, first_seed, settings->temperature);
+	policy_init(&second_policy, game, &second, second_seed, settings->temperature);
 
-	trainer_run(&first_trainer, &first_policy, settings->training_games);
-	trainer_run(&second_trainer, &second_policy, settings->training_games);
+	trainer_run(&first_trainer, game, &first_policy, settings->training_games);
+	trainer_run(&second_trainer, game, &second_policy, settings->training_games);
 
-	arena_measure(settings, &first, &first_after);
-	arena_measure(settings, &second, &second_after);
+	arena_measure(settings, game, oracle, &first, &first_after);
+	arena_measure(settings, game, oracle, &second, &second_after);
 
 	/* and they meet again */
-	arena_stage(settings, &first, &first_after, &second, &second_after,
+	arena_stage(settings, game, oracle, &first, &first_after, &second, &second_after,
 	            &duel->stages[DUEL_OWN_GAMES]);
 
 	/* and now they learn against each other */
 	for (int i = 0; i < settings->training_games; i++) {
-		game_t game;
-		int first_is_x = (i % 2) == 0;
+		game_trace_t trace;
+		int first_is_first = (i % 2) == 0;
 
-		if (first_is_x)
-			game_play(&game, &first_policy, &second_policy);
+		if (first_is_first)
+			game_play(game, policy_choose, &first_policy, policy_choose,
+			          &second_policy, &trace);
 		else
-			game_play(&game, &second_policy, &first_policy);
+			game_play(game, policy_choose, &second_policy, policy_choose,
+			          &first_policy, &trace);
 
-		arena_tally_a_game(&game, first_is_x, &duel->together_games);
+		arena_tally_a_game(game, &trace, first_is_first, &duel->together_games);
 
 		/* both of them learn the result of the game they played */
-		trainer_train_game(&first_trainer, &game);
-		trainer_train_game(&second_trainer, &game);
+		trainer_learn_from_outcome(&first_trainer, game, &trace);
+		trainer_learn_from_outcome(&second_trainer, game, &trace);
 	}
 
-	arena_measure(settings, &first, &first_after);
-	arena_measure(settings, &second, &second_after);
+	arena_measure(settings, game, oracle, &first, &first_after);
+	arena_measure(settings, game, oracle, &second, &second_after);
 
 	/* and they meet once more */
-	arena_stage(settings, &first, &first_after, &second, &second_after,
+	arena_stage(settings, game, oracle, &first, &first_after, &second, &second_after,
 	            &duel->stages[DUEL_TOGETHER]);
 
 	return true;
@@ -429,7 +432,8 @@ static double measure_general(const league_model_t *model)
  * The temperature is how much the policy explores while it is learning, and
  * it is what makes two models of the same kind play differently.
  */
-static bool league_build_one(const arena_settings_t *settings, unsigned long long seed,
+static bool league_build_one(const arena_settings_t *settings, const game_t *game,
+                             const oracle_t *oracle, unsigned long long seed,
                              league_teacher_t teacher, double temperature,
                              network_t *network, policy_t *policy, trainer_t *trainer,
                              league_model_t *record)
@@ -439,17 +443,17 @@ static bool league_build_one(const arena_settings_t *settings, unsigned long lon
 
 	rng_seed(&rng, seed);
 
-	if (!arena_build(network, settings, INIT_RANDOM, &rng)) return false;
+	if (!arena_build(game, network, settings, INIT_RANDOM, &rng)) return false;
 
 	trainer_init(trainer, network, settings->learning_rate);
-	policy_init(policy, network, seed, temperature);
+	policy_init(policy, game, network, seed, temperature);
 
 	if (teacher == LEAGUE_TRUTH)
-		arena_learn_from_the_truth(trainer, policy, settings->training_games);
+		arena_learn_from_the_truth(trainer, game, oracle, policy, settings->training_games);
 	else
-		trainer_run(trainer, policy, settings->training_games);
+		trainer_run(trainer, game, policy, settings->training_games);
 
-	arena_measure(settings, network, &look);
+	arena_measure(settings, game, oracle, network, &look);
 
 	record->seed = seed;
 	record->teacher = teacher;
@@ -464,8 +468,8 @@ static bool league_build_one(const arena_settings_t *settings, unsigned long lon
 	return true;
 }
 
-bool arena_league(const arena_settings_t *settings, int models,
-                  arena_league_t *league)
+bool arena_league(const arena_settings_t *settings, const game_t *game,
+                  const oracle_t *oracle, int models, arena_league_t *league)
 {
 	network_t *network = NULL;
 	policy_t *policy = NULL;
@@ -474,7 +478,7 @@ bool arena_league(const arena_settings_t *settings, int models,
 	policy_t held_policy[ARENA_HELD_OUT];
 	rng_t rng;
 
-	if (settings == NULL || league == NULL) return false;
+	if (settings == NULL || game == NULL || oracle == NULL || league == NULL) return false;
 	if (models < 2 || models > ARENA_MAX_MODELS) return false;
 	if (settings->training_games < 0 || settings->evaluation_games < 1) return false;
 	if (settings->match_games < 1) return false;
@@ -502,7 +506,7 @@ bool arena_league(const arena_settings_t *settings, int models,
 		league_teacher_t teacher = (i % 2 == 0) ? LEAGUE_TRUTH : LEAGUE_SELF;
 		unsigned long long seed = settings->training_seed + (unsigned long long)i;
 
-		if (!league_build_one(settings, seed, teacher, settings->temperature,
+		if (!league_build_one(settings, game, oracle, seed, teacher, settings->temperature,
 		                      &network[i], &policy[i], &trainer[i], &league->model[i])) {
 			free(network);
 			free(policy);
@@ -525,9 +529,9 @@ bool arena_league(const arena_settings_t *settings, int models,
 		                          (unsigned long long)models +
 		                          (unsigned long long)held;
 
-		if (!league_build_one(settings, league->held_seed[held],
-		                       teacher, temperature, &held_network[held],
-		                       &held_policy[held], &held_trainer, &record)) {
+		if (!league_build_one(settings, game, oracle, league->held_seed[held],
+		                      teacher, temperature, &held_network[held],
+		                      &held_policy[held], &held_trainer, &record)) {
 			free(network);
 			free(policy);
 			free(trainer);
@@ -542,7 +546,7 @@ bool arena_league(const arena_settings_t *settings, int models,
 			int same_kind = (league->model[i].teacher ==
 			                 (held % 2 == 0) ? LEAGUE_TRUTH : LEAGUE_SELF);
 
-			evaluate_against(&network[i], &held_network[held],
+			evaluate_against(game, oracle, &network[i], &held_network[held],
 			                 settings->evaluation_seed, settings->match_games,
 			                 0.0, &match);
 
@@ -566,7 +570,7 @@ bool arena_league(const arena_settings_t *settings, int models,
 			int second_points;
 			int same_kind;
 
-			evaluate_against(&network[i], &network[j], settings->evaluation_seed,
+			evaluate_against(game, oracle, &network[i], &network[j], settings->evaluation_seed,
 			                 settings->match_games, 0.0, &match);
 
 			first_points = 3 * match.first_wins + match.draws;
@@ -618,9 +622,10 @@ bool arena_league(const arena_settings_t *settings, int models,
 	return true;
 }
 
-bool arena_survey(const arena_settings_t *settings, int runs, arena_survey_t *survey)
+bool arena_survey(const arena_settings_t *settings, const game_t *game,
+                  const oracle_t *oracle, int runs, arena_survey_t *survey)
 {
-	if (settings == NULL || survey == NULL) return false;
+	if (settings == NULL || game == NULL || oracle == NULL || survey == NULL) return false;
 	if (runs < 1 || runs > ARENA_MAX_RUNS) return false;
 
 	memset(survey, 0, sizeof(*survey));
@@ -633,7 +638,7 @@ bool arena_survey(const arena_settings_t *settings, int runs, arena_survey_t *su
 		 * differently and learn from different games */
 		one.training_seed = settings->training_seed + (unsigned long long)run;
 
-		if (!arena_run_all(&one, &survey->reports[run])) return false;
+		if (!arena_run_all(&one, game, oracle, &survey->reports[run])) return false;
 
 		survey->runs++;
 

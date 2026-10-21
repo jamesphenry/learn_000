@@ -2,7 +2,7 @@
 #define EVALUATE_H
 
 #include <stdbool.h>
-#include "board.h"
+#include "game.h"
 #include "network.h"
 
 // The probabilities are grouped into this many bands.
@@ -17,22 +17,22 @@ typedef struct {
 	int wins;
 	int draws;
 	int losses;
-	/* how many of the games the network took each colour in, and how many
-	 * it won in each */
-	int as_x;
-	int as_o;
-	int wins_as_x;
-	int wins_as_o;
-	/* how many of the games X won, whoever was playing. The network
-	 * answers with the chance that X wins, so this is what its
-	 * probabilities are measured against. */
-	int x_wins;
+	/* how many of the games the network took each side in, and how many it
+	 * won in each */
+	int as_first;
+	int as_second;
+	int wins_as_first;
+	int wins_as_second;
+	/* how many of the games the first player won, whoever was playing. The
+	 * network answers with the chance that the player to move wins, so
+	 * this is what its probabilities are measured against. */
+	int first_wins;
 	/* the moves that were played, which is how many the probabilities
 	 * were measured over */
 	int moves;
-	/* the moves that were played in the games X won and in the games that
-	 * were drawn */
-	int moves_in_x_wins;
+	/* the moves that were played in the games the first player won and in
+	 * the games that were drawn */
+	int moves_in_first_wins;
 	int moves_in_draws;
 	/* and the moves the player to move went on to win, which is what the
 	 * worth of a position is measured against */
@@ -65,9 +65,9 @@ typedef struct {
 	double hidden_highest;
 	double output_lowest;
 	double output_highest;
-	double worth;           /* what it says about an empty board */
-	double gradient_to_one;  /* how hard it would be to learn that X wins */
-	double gradient_to_zero; /* and how hard it would be to learn that O wins */
+	double worth;           /* what it says about the position it starts from */
+	double gradient_to_one;  /* how hard it would be to learn that a position is a win */
+	double gradient_to_zero; /* and how hard it would be to learn that it is a loss */
 } initialisation_t;
 
 /*
@@ -79,19 +79,19 @@ typedef struct {
 	int draws;
 	int second_wins;
 	int flagged;  /* the games the referee did not accept */
-	/* how many of the games the first network played as X, and how many it
-	 * won in them */
-	int first_as_x;
-	int first_wins_as_x;
+	/* how many of the games the first network started, and how many it won
+	 * in them */
+	int first_as_first;
+	int first_wins_as_first;
 } match_result_t;
 
 /*
  * How much value a network gave away.
  *
  * Every position is worth something to the player to move: a win, a draw or
- * a loss. The best move there is keeps that worth; any other move leaves
- * the position worth less. This counts the moves that kept the worth and
- * the moves that gave it away.
+ * a loss. The best move there is keeps that worth; any other move leaves the
+ * position worth less. This counts the moves that kept the worth and the
+ * moves that gave it away.
  */
 typedef struct {
 	int moves;        /* the moves that were played */
@@ -103,28 +103,29 @@ typedef struct {
 
 /*
  * How a network did against the perfect player, which never makes a
- * mistake. The network takes one colour and then the other.
+ * mistake. The network takes one side and then the other.
  */
 typedef struct {
 	int games;
 	int wins;
 	int draws;
 	int losses;
-	/* how many of the games the network took each colour in, and how many
-	 * it won in each */
-	int as_x;
-	int as_o;
-	int wins_as_x;
-	int wins_as_o;
+	/* how many of the games the network took each side in, and how many it
+	 * won in each */
+	int as_first;
+	int as_second;
+	int wins_as_first;
+	int wins_as_second;
 } perfect_result_t;
 
 /*
- * Plays two networks against each other, with each of them taking one
- * colour, and says how the first one did. Every game is put past the
- * referee, so a model that played a move that was not allowed is counted
- * and the game is left out of the tally.
+ * Plays two networks against each other, with each of them taking one side,
+ * and says how the first one did. Every game is put past the referee, so a
+ * model that played a move that was not allowed is counted and the game is
+ * left out of the tally.
  */
-bool evaluate_against(const network_t *first, const network_t *second,
+bool evaluate_against(const game_t *game, const oracle_t *oracle,
+                      const network_t *first, const network_t *second,
                       unsigned long long seed, int games, double temperature,
                       match_result_t *result);
 
@@ -139,29 +140,33 @@ bool evaluate_against(const network_t *first, const network_t *second,
  * knows best. At an infinite temperature it plays at random, which reaches
  * the positions the network would not have reached on its own.
  */
-bool evaluate_skill(const network_t *network, unsigned long long seed, int games,
+bool evaluate_skill(const game_t *game, const oracle_t *oracle,
+                    const network_t *network, unsigned long long seed, int games,
                     double opponent_temperature, skill_t *result);
 
 /*
  * Plays against the perfect player and says how it did.
  */
-bool evaluate_against_perfect(const network_t *network, unsigned long long seed,
+bool evaluate_against_perfect(const game_t *game, const oracle_t *oracle,
+                              const network_t *network, unsigned long long seed,
                               int games, perfect_result_t *result);
 
 /*
  * Looks at a network before it has learned anything, and says what it looks
  * like.
  */
-bool evaluate_initialisation(const network_t *network, initialisation_t *result);
+bool evaluate_initialisation(const game_t *game, const network_t *network,
+                             initialisation_t *result);
 
 /*
  * Plays games against an opponent that plays at random, with the network
- * taking one colour and then the other, and measures how the network did.
+ * taking one side and then the other, and measures how the network did.
  *
  * The buckets hold the same thing in groups, so a network that says 0.7
  * can be held against how often that turned out to be right.
  */
-bool evaluate_network(const network_t *network, unsigned long long seed, int games,
+bool evaluate_network(const game_t *game, const oracle_t *oracle,
+                      const network_t *network, unsigned long long seed, int games,
                       evaluation_t *result);
 
 #endif // EVALUATE_H

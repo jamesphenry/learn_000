@@ -1,4 +1,5 @@
 #include "trainer.h"
+#include "policy.h"
 
 /*
  * The error signal of one neuron: how much the loss changes if its sum
@@ -6,16 +7,17 @@
  * derivative of the sigmoid is already folded in, so the error of the
  * neuron is just its output less the target.
  */
-static void train_step(trainer_t *trainer, const board_t *board, double target)
+static void train_step(trainer_t *trainer, const game_t *game,
+                       const game_position_t *position, double target)
 {
 	network_t *network = trainer->network;
 	int last = network->n_layers - 1;
-	double inputs[CELL_COUNT];
+	double inputs[GAME_MAX_FEATURES];
 	double sums[NETWORK_MAX_LAYERS][LAYER_MAX_NEURONS];
 	double outputs[NETWORK_MAX_LAYERS][LAYER_MAX_NEURONS];
 	double error[NETWORK_MAX_LAYERS][LAYER_MAX_NEURONS];
 
-	board_to_inputs(board, inputs);
+	game->features(position, inputs);
 
 	/* the forward pass, keeping the sums so the backward pass knows which
 	 * of them were switched off */
@@ -85,55 +87,81 @@ bool trainer_init(trainer_t *trainer, network_t *network, double learning_rate)
 	return true;
 }
 
-bool trainer_train_position(trainer_t *trainer, const board_t *board, double target)
+bool trainer_train_position(trainer_t *trainer, const game_t *game,
+                            const game_position_t *position, double target)
 {
-	if (trainer == NULL || board == NULL) return false;
+	if (trainer == NULL || game == NULL || position == NULL) return false;
 	if (trainer->network == NULL) return false;
 
-	train_step(trainer, board, target);
+	train_step(trainer, game, position, target);
 
 	return true;
 }
 
-bool trainer_train_game(trainer_t *trainer, const game_t *game)
+bool trainer_learn_from_oracle(trainer_t *trainer, const game_t *game,
+                               const oracle_t *oracle, const game_trace_t *trace)
 {
-	network_t *network;
-	board_t positions[CELL_COUNT];
-	double target;
+	game_position_t positions[GAME_MAX_HISTORY];
+	game_position_t final;
+	int played;
 
-	if (trainer == NULL || game == NULL) return false;
-
-	network = trainer->network;
-	if (network == NULL) return false;
-
-	game_result_t outcome = game_result(game);
+	if (trainer == NULL || game == NULL || oracle == NULL || trace == NULL) return false;
+	if (trainer->network == NULL) return false;
+	if (oracle->worth == NULL || oracle->state == NULL) return false;
 
 	/* the game is played again from the start, so that every position is
 	 * seen as it was when the move was made */
-	game_positions(game, positions);
+	played = game_replay(game, trace, positions, &final);
 
-	/* and each position is worth what happened to the player who was to
-	 * move in it */
-	for (int step = 0; step < game->moves; step++) {
-		target = game_worth_of_result(positions[step].current_player, outcome);
+	/* and each position is worth what the perfect player knows it to be
+	 * worth */
+	for (int step = 0; step < played; step++) {
+		double target = oracle->worth(oracle->state, &positions[step]);
 
-		train_step(trainer, &positions[step], target);
+		train_step(trainer, game, &positions[step], target);
 	}
 
 	return true;
 }
 
-int trainer_run(trainer_t *trainer, policy_t *policy, int games)
+bool trainer_learn_from_outcome(trainer_t *trainer, const game_t *game,
+                                const game_trace_t *trace)
 {
-	game_t game;
+	game_position_t positions[GAME_MAX_HISTORY];
+	game_position_t final;
+	game_outcome_t outcome;
+	int played;
+
+	if (trainer == NULL || game == NULL || trace == NULL) return false;
+	if (trainer->network == NULL) return false;
+
+	played = game_replay(game, trace, positions, &final);
+
+	/* and the game is over, so what it came to is known */
+	outcome = game->outcome(&final);
+
+	/* and each position is worth what happened to the player who was to
+	 * move in it */
+	for (int step = 0; step < played; step++) {
+		double target = game_worth_of_outcome(outcome, game->to_move(&positions[step]));
+
+		train_step(trainer, game, &positions[step], target);
+	}
+
+	return true;
+}
+
+int trainer_run(trainer_t *trainer, const game_t *game, policy_t *policy, int games)
+{
+	game_trace_t trace;
 	int played = 0;
 
-	if (trainer == NULL || policy == NULL) return 0;
+	if (trainer == NULL || game == NULL || policy == NULL) return 0;
 
 	for (int i = 0; i < games; i++) {
-		game_play(&game, policy, policy);
+		if (!game_play(game, policy_choose, policy, policy_choose, policy, &trace)) break;
 
-		if (!trainer_train_game(trainer, &game)) break;
+		if (!trainer_learn_from_outcome(trainer, game, &trace)) break;
 
 		played++;
 	}

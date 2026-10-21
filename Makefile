@@ -7,6 +7,7 @@ OBJ_DIR = obj
 TST_DIR = test
 TMP_DIR = tmp
 BIN_DIR = src
+GAMES_DIR = games
 
 # Compiler and flags
 CC ?= gcc
@@ -20,13 +21,22 @@ CFLAGS += -I$(INC_DIR) -Wall -Wextra -Werror
 LDLIBS += -Wl,--no-as-needed -lm
 CFLAGS += $(LDLIBS)
 
-# Every .c file under src/ is a separate translation unit and is compiled and
-# linked on its own, so the project is free to grow more sources (board.c,
-# main.c, ...) without touching this file.
+# Every game has its own include directory and its own sources, and every
+# header in them is on the path, so the framework and the games can be built
+# and tested on their own.
+GAME_INC = $(wildcard $(GAMES_DIR)/*/include)
+GAME_SRC = $(wildcard $(GAMES_DIR)/*/src/*.c)
+GAME_TST = $(wildcard $(GAMES_DIR)/*/test/*.test.c)
+
+CFLAGS += $(foreach dir,$(GAME_INC),-I$(dir))
+
+# Every .c file under src/ and under the games is a separate translation unit
+# and is compiled and linked on its own, so the project is free to grow more
+# sources (board.c, main.c, ...) without touching this file.
 INC = $(wildcard $(INC_DIR)/*.h)
-SRC = $(wildcard $(SRC_DIR)/*.c)
-TST = $(wildcard $(TST_DIR)/*.test.c)
-OBJ = $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
+SRC = $(wildcard $(SRC_DIR)/*.c) $(GAME_SRC)
+TST = $(wildcard $(TST_DIR)/*.test.c) $(GAME_TST)
+OBJ = $(SRC:%.c=$(OBJ_DIR)/%.o)
 TARGET = $(BIN_DIR)/learn_000
 DEBUG_TARGET = $(TARGET)-debug
 
@@ -45,7 +55,8 @@ $(TARGET): $(OBJ) | $(BIN_DIR)
 	$(CC) $(OBJ) -o $@ $(CFLAGS) $(LDFLAGS)
 
 # Rule to build object files
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
+$(OBJ_DIR)/%.o: %.c | $(OBJ_DIR)
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 

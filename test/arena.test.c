@@ -6,17 +6,21 @@
 #include <string.h>
 
 #include "../src/arena.c"
-#include "../src/board.c"
 #include "../src/evaluate.c"
 #include "../src/game.c"
 #include "../src/judge.c"
 #include "../src/layer.c"
-#include "../src/minimax.c"
 #include "../src/network.c"
 #include "../src/neuron.c"
 #include "../src/policy.c"
 #include "../src/rng.c"
 #include "../src/trainer.c"
+#include "../games/tic-tac-toe/src/board.c"
+#include "../games/tic-tac-toe/src/minimax.c"
+#include "../games/tic-tac-toe/src/tictactoe.c"
+
+static game_t game;
+static oracle_t oracle;
 
 static bool nearly_equal(double actual, double expected)
 {
@@ -55,15 +59,15 @@ static char *test_it_refuses_bad_arguments(void)
 
 	build_small_settings(&settings);
 
-	_it_should("refuse no settings", !arena_run(NULL, INIT_ZERO, &result));
-	_it_should("refuse nowhere to put the result", !arena_run(&settings, INIT_ZERO, NULL));
+	_it_should("refuse no settings", !arena_run(NULL, &game, &oracle, INIT_ZERO, &result));
+	_it_should("refuse nowhere to put the result", !arena_run(&settings, &game, &oracle, INIT_ZERO, NULL));
 
 	settings.evaluation_games = 0;
-	_it_should("refuse to measure no games", !arena_run(&settings, INIT_ZERO, &result));
+	_it_should("refuse to measure no games", !arena_run(&settings, &game, &oracle, INIT_ZERO, &result));
 
 	settings.evaluation_games = 20;
 	settings.hidden_neurons = 0;
-	_it_should("refuse a hidden layer of nought", !arena_run(&settings, INIT_ZERO, &result));
+	_it_should("refuse a hidden layer of nought", !arena_run(&settings, &game, &oracle, INIT_ZERO, &result));
 
 	return NULL;
 }
@@ -76,7 +80,7 @@ static char *test_a_model_that_is_never_trained_can_be_measured(void)
 	build_small_settings(&settings);
 	settings.training_games = 0;
 
-	_it_should("run", arena_run(&settings, INIT_ZERO, &result));
+	_it_should("run", arena_run(&settings, &game, &oracle, INIT_ZERO, &result));
 	_it_should("train on no games", result.trained_games == 0);
 
 	/* the model has not changed, so both measurements are of the same model
@@ -97,7 +101,7 @@ static char *test_a_run_reports_a_result(void)
 
 	build_small_settings(&settings);
 
-	_it_should("run", arena_run(&settings, INIT_RANDOM, &result));
+	_it_should("run", arena_run(&settings, &game, &oracle, INIT_RANDOM, &result));
 	_it_should("train on the games it was given", result.trained_games == 20);
 	_it_should("give a win rate between nought and a hundred",
 		result.win_rate_after >= 0.0 && result.win_rate_after <= 100.0);
@@ -117,8 +121,8 @@ static char *test_the_same_run_gives_the_same_result(void)
 
 	build_small_settings(&settings);
 
-	arena_run(&settings, INIT_RANDOM, &first);
-	arena_run(&settings, INIT_RANDOM, &second);
+	arena_run(&settings, &game, &oracle, INIT_RANDOM, &first);
+	arena_run(&settings, &game, &oracle, INIT_RANDOM, &second);
 
 	_it_should("give the same win rate",
 		nearly_equal(first.win_rate_after, second.win_rate_after));
@@ -137,9 +141,9 @@ static char *test_the_way_a_model_starts_off_matters(void)
 
 	build_small_settings(&settings);
 
-	arena_run(&settings, INIT_ZERO, &zero);
-	arena_run(&settings, INIT_RANDOM, &random);
-	arena_run(&settings, INIT_MAXIMUM, &maximum);
+	arena_run(&settings, &game, &oracle, INIT_ZERO, &zero);
+	arena_run(&settings, &game, &oracle, INIT_RANDOM, &random);
+	arena_run(&settings, &game, &oracle, INIT_MAXIMUM, &maximum);
 
 	/* every pair has to differ, or one of the three is not being started
 	 * the way it says it is */
@@ -163,7 +167,7 @@ static char *test_a_model_that_learns_gets_better(void)
 	build_small_settings(&settings);
 	settings.training_games = 200;
 
-	arena_run(&settings, INIT_RANDOM, &result);
+	arena_run(&settings, &game, &oracle, INIT_RANDOM, &result);
 
 	/* a model that has learned something should be closer to the truth */
 	_it_should("get closer to the truth", result.truth_after < result.truth_before);
@@ -178,7 +182,7 @@ static char *test_a_run_says_what_the_model_gave_away(void)
 
 	build_small_settings(&settings);
 
-	arena_run(&settings, INIT_RANDOM, &result);
+	arena_run(&settings, &game, &oracle, INIT_RANDOM, &result);
 
 	/* the worth a position can be given away is between nought and two:
 	 * a win given away is one and a loss given away is one */
@@ -190,7 +194,7 @@ static char *test_a_run_says_what_the_model_gave_away(void)
 		result.perfect_after.wins + result.perfect_after.draws +
 		result.perfect_after.losses == settings.evaluation_games);
 	_it_should("take each colour the same number of times",
-		result.perfect_after.as_x == result.perfect_after.as_o);
+		result.perfect_after.as_first == result.perfect_after.as_second);
 
 	return NULL;
 }
@@ -205,10 +209,10 @@ static char *test_the_perfect_player_teaches_better_than_its_own_games(void)
 	settings.training_games = 500;
 
 	settings.learning = ARENA_LEARN_TRUTH;
-	arena_run(&settings, INIT_RANDOM, &truth);
+	arena_run(&settings, &game, &oracle, INIT_RANDOM, &truth);
 
 	settings.learning = ARENA_LEARN_SELF;
-	arena_run(&settings, INIT_RANDOM, &self);
+	arena_run(&settings, &game, &oracle, INIT_RANDOM, &self);
 
 	/* the perfect player says what each position is worth, so a model
 	 * taught by it should end up closer to the truth than one that has to
@@ -226,7 +230,7 @@ static char *test_the_models_play_each_other(void)
 	build_small_settings(&settings);
 	settings.match_games = 20;
 
-	_it_should("run", arena_run_all(&settings, &report));
+	_it_should("run", arena_run_all(&settings, &game, &oracle, &report));
 
 	for (int first = 0; first < ARENA_SCHEMES; first++) {
 		_it_should("train every model the same",
@@ -240,7 +244,7 @@ static char *test_the_models_play_each_other(void)
 				report.matches[first][second].draws +
 				report.matches[first][second].second_wins == settings.match_games);
 			_it_should("take each colour the same number of times",
-				report.matches[first][second].first_as_x ==
+				report.matches[first][second].first_as_first ==
 				settings.match_games / 2);
 			_it_should("have no games flagged",
 				report.matches[first][second].flagged == 0);
@@ -258,8 +262,8 @@ static char *test_the_same_report_comes_again(void)
 
 	build_small_settings(&settings);
 
-	arena_run_all(&settings, &first);
-	arena_run_all(&settings, &second);
+	arena_run_all(&settings, &game, &oracle, &first);
+	arena_run_all(&settings, &game, &oracle, &second);
 
 	for (int i = 0; i < ARENA_SCHEMES; i++)
 		for (int j = i + 1; j < ARENA_SCHEMES; j++) {
@@ -282,7 +286,7 @@ static char *test_the_model_that_learned_beats_the_one_that_did_not(void)
 	settings.match_games = 40;
 	settings.learning = ARENA_LEARN_TRUTH;
 
-	_it_should("run", arena_run_all(&settings, &report));
+	_it_should("run", arena_run_all(&settings, &game, &oracle, &report));
 
 	/* the model that was started at random has learned the worth of a
 	 * position and the one that was started at zero never can, so the
@@ -301,7 +305,7 @@ static char *test_a_survey_runs_the_arena_several_times(void)
 
 	build_small_settings(&settings);
 
-	_it_should("run", arena_survey(&settings, 3, &survey));
+	_it_should("run", arena_survey(&settings, &game, &oracle, 3, &survey));
 	_it_should("keep a report for every run", survey.runs == 3);
 
 	for (int run = 0; run < survey.runs; run++) {
@@ -322,7 +326,7 @@ static char *test_each_run_has_a_seed_of_its_own(void)
 
 	build_small_settings(&settings);
 
-	arena_survey(&settings, 3, &survey);
+	arena_survey(&settings, &game, &oracle, 3, &survey);
 
 	for (int run = 1; run < survey.runs; run++)
 		_it_should("use a different seed in every run",
@@ -345,7 +349,7 @@ static char *test_the_survey_counts_the_round_robin(void)
 	build_small_settings(&settings);
 	settings.match_games = 10;
 
-	arena_survey(&settings, 3, &survey);
+	arena_survey(&settings, &game, &oracle, 3, &survey);
 
 	/* what the reports say, worked out again here */
 	for (int run = 0; run < survey.runs; run++) {
@@ -412,8 +416,8 @@ static char *test_the_same_survey_comes_again(void)
 
 	build_small_settings(&settings);
 
-	arena_survey(&settings, 2, &first);
-	arena_survey(&settings, 2, &second);
+	arena_survey(&settings, &game, &oracle, 2, &first);
+	arena_survey(&settings, &game, &oracle, 2, &second);
 
 	for (int run = 0; run < first.runs; run++) {
 		for (int scheme = 0; scheme < ARENA_SCHEMES; scheme++) {
@@ -433,11 +437,11 @@ static char *test_a_survey_refuses_bad_arguments(void)
 
 	build_small_settings(&settings);
 
-	_it_should("refuse no settings", !arena_survey(NULL, 3, &survey));
-	_it_should("refuse nowhere to put the survey", !arena_survey(&settings, 3, NULL));
-	_it_should("refuse no runs", !arena_survey(&settings, 0, &survey));
+	_it_should("refuse no settings", !arena_survey(NULL, &game, &oracle, 3, &survey));
+	_it_should("refuse nowhere to put the survey", !arena_survey(&settings, &game, &oracle, 3, NULL));
+	_it_should("refuse no runs", !arena_survey(&settings, &game, &oracle, 0, &survey));
 	_it_should("refuse more runs than it holds",
-		!arena_survey(&settings, ARENA_MAX_RUNS + 1, &survey));
+		!arena_survey(&settings, &game, &oracle, ARENA_MAX_RUNS + 1, &survey));
 
 	return NULL;
 }
@@ -450,7 +454,7 @@ static char *test_a_duel_is_three_meetings(void)
 	build_small_settings(&settings);
 	settings.match_games = 20;
 
-	_it_should("run", arena_duel(&settings, 42, 1978, &duel));
+	_it_should("run", arena_duel(&settings, &game, &oracle, 42, 1978, &duel));
 
 	/* and they meet three times */
 	_it_should("meet before either has learned",
@@ -484,7 +488,7 @@ static char *test_the_two_models_of_a_duel_start_off_differently(void)
 
 	build_small_settings(&settings);
 
-	arena_duel(&settings, 42, 1978, &duel);
+	arena_duel(&settings, &game, &oracle, 42, 1978, &duel);
 
 	/* each is started off with its own seed, so they are not the same model */
 	_it_should("start the two models off differently",
@@ -510,8 +514,8 @@ static char *test_the_duel_measures_a_model_the_way_the_arena_does(void)
 	settings.training_games = 0;
 	settings.training_seed = 42;
 
-	arena_duel(&settings, 42, 42, &duel);
-	arena_run(&settings, INIT_RANDOM, &alone);
+	arena_duel(&settings, &game, &oracle, 42, 42, &duel);
+	arena_run(&settings, &game, &oracle, INIT_RANDOM, &alone);
 
 	_it_should("measure the truth the same way",
 		nearly_equal(duel.stages[DUEL_BEFORE].truth[0], alone.truth_before));
@@ -529,7 +533,7 @@ static char *test_both_models_learn_from_the_games_they_play_together(void)
 	build_small_settings(&settings);
 	settings.training_games = 500;
 
-	arena_duel(&settings, 42, 1978, &duel);
+	arena_duel(&settings, &game, &oracle, 42, 1978, &duel);
 
 	/* the games they play against each other change both of them: each
 	 * ends up worth something different from what it was worth when it had
@@ -553,8 +557,8 @@ static char *test_the_same_duel_comes_again(void)
 	build_small_settings(&settings);
 	settings.match_games = 20;
 
-	arena_duel(&settings, 42, 1978, &first);
-	arena_duel(&settings, 42, 1978, &second);
+	arena_duel(&settings, &game, &oracle, 42, 1978, &first);
+	arena_duel(&settings, &game, &oracle, 42, 1978, &second);
 
 	_it_should("give the same first meeting",
 		first.stages[DUEL_BEFORE].meeting.first_wins ==
@@ -580,8 +584,8 @@ static char *test_a_duel_refuses_bad_arguments(void)
 
 	build_small_settings(&settings);
 
-	_it_should("refuse no settings", !arena_duel(NULL, 42, 1978, &duel));
-	_it_should("refuse nowhere to put the duel", !arena_duel(&settings, 42, 1978, NULL));
+	_it_should("refuse no settings", !arena_duel(NULL, &game, &oracle, 42, 1978, &duel));
+	_it_should("refuse nowhere to put the duel", !arena_duel(&settings, &game, &oracle, 42, 1978, NULL));
 
 	return NULL;
 }
@@ -594,7 +598,7 @@ static char *test_a_league_plays_every_pair(void)
 	build_small_settings(&settings);
 	settings.match_games = 10;
 
-	_it_should("run", arena_league(&settings, 8, &league));
+	_it_should("run", arena_league(&settings, &game, &oracle, 8, &league));
 
 	_it_should("hold every model", league.models == 8);
 
@@ -651,7 +655,7 @@ static char *test_every_model_in_a_league_has_a_seed_of_its_own(void)
 
 	build_small_settings(&settings);
 
-	arena_league(&settings, 8, &league);
+	arena_league(&settings, &game, &oracle, 8, &league);
 
 	for (int i = 0; i < league.models; i++)
 		_it_should("give each model a seed of its own",
@@ -667,7 +671,7 @@ static char *test_the_three_rankings_of_a_league_are_in_order(void)
 
 	build_small_settings(&settings);
 
-	arena_league(&settings, 8, &league);
+	arena_league(&settings, &game, &oracle, 8, &league);
 
 	for (int i = 1; i < league.models; i++) {
 		/* the less worth it gave away while learning, the better it
@@ -707,7 +711,7 @@ static char *test_the_held_back_opponents_are_of_both_kinds(void)
 	settings.training_games = 2000;
 	settings.hidden_neurons = 8;
 
-	arena_league(&settings, 6, &league);
+	arena_league(&settings, &game, &oracle, 6, &league);
 
 	for (int i = 0; i < league.models; i++) {
 		if (league.model[i].teacher == LEAGUE_TRUTH)
@@ -730,7 +734,7 @@ static char *test_the_held_back_models_are_not_in_the_league(void)
 
 	build_small_settings(&settings);
 
-	arena_league(&settings, 8, &league);
+	arena_league(&settings, &game, &oracle, 8, &league);
 
 	for (int held = 0; held < ARENA_HELD_OUT; held++) {
 		int in_the_league = 0;
@@ -752,8 +756,8 @@ static char *test_the_same_league_comes_again(void)
 
 	build_small_settings(&settings);
 
-	arena_league(&settings, 8, &first);
-	arena_league(&settings, 8, &second);
+	arena_league(&settings, &game, &oracle, 8, &first);
+	arena_league(&settings, &game, &oracle, 8, &second);
 
 	_it_should("give the same champion", first.champion == second.champion);
 	_it_should("give the same points",
@@ -772,17 +776,21 @@ static char *test_a_league_refuses_bad_arguments(void)
 
 	build_small_settings(&settings);
 
-	_it_should("refuse no settings", !arena_league(NULL, 8, &league));
-	_it_should("refuse nowhere to put the league", !arena_league(&settings, 8, NULL));
-	_it_should("refuse one model", !arena_league(&settings, 1, &league));
+	_it_should("refuse no settings", !arena_league(NULL, &game, &oracle, 8, &league));
+	_it_should("refuse nowhere to put the league", !arena_league(&settings, &game, &oracle, 8, NULL));
+	_it_should("refuse one model", !arena_league(&settings, &game, &oracle, 1, &league));
 	_it_should("refuse more models than it holds",
-		!arena_league(&settings, ARENA_MAX_MODELS + 1, &league));
+		!arena_league(&settings, &game, &oracle, ARENA_MAX_MODELS + 1, &league));
 
 	return NULL;
 }
 
 static char *run_tests()
 {
+	tictactoe_game(&game);
+	tictactoe_oracle(&oracle);
+	oracle_start(&oracle);
+
 	_run_test(test_the_settings_start_with_sensible_values);
 	_run_test(test_it_refuses_bad_arguments);
 	_run_test(test_a_model_that_is_never_trained_can_be_measured);
@@ -813,6 +821,8 @@ static char *run_tests()
 	_run_test(test_the_held_back_models_are_not_in_the_league);
 	_run_test(test_the_same_league_comes_again);
 	_run_test(test_a_league_refuses_bad_arguments);
+
+	oracle_stop(&oracle);
 
 	return NULL;
 }
