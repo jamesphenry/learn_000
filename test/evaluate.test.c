@@ -87,13 +87,14 @@ static char *test_an_untrained_network_says_a_half(void)
 	_it_should("put them all in the middle band", result.bucket_counts[2] == moves);
 	_it_should("say a half for all of them", nearly_equal(result.bucket_predicted[2], 0.5));
 
-	/* the network answers with the worth of a position, which is one if X
-	 * wins it, a half if it is drawn and nought if O wins it, so the share
-	 * of the moves that ended that way is what it is measured against */
-	double expected = (double)result.moves_in_x_wins / result.moves +
+	/* the network answers with the worth of a position to the player to
+	 * move, which is one if they win it, a half if it is drawn and nought
+	 * if they lose it, so the share of the moves that ended that way is what
+	 * it is measured against */
+	double expected = (double)result.moves_won / result.moves +
 	                  0.5 * result.moves_in_draws / result.moves;
 
-	_it_should("measure against the moves in the games X won",
+	_it_should("measure against the moves the player to move won",
 		nearly_equal(result.bucket_observed[2], expected));
 
 	/* a half against a result of one or zero is a quarter out, and a half
@@ -201,7 +202,7 @@ static double expected_truth_error(network_t *network)
 			board_to_inputs(&positions[step], inputs);
 			network_forward(network, inputs, CELL_COUNT, &worth, 1);
 
-			total += fabs(worth - minimax_x_win_chance(&oracle, &positions[step]));
+			total += fabs(worth - minimax_worth(&oracle, &positions[step]));
 			moves++;
 		}
 	}

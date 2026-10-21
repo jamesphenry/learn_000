@@ -179,8 +179,8 @@ static char *test_the_match_counts_the_draws_correctly(void)
 	network_t network;
 	match_result_t result;
 
-	/* the cells are taken in this order, with X taking the first, the
-	 * third and so on. This leaves the board
+	/* the cells are taken in this order, with X taking the first five and
+	 * O the last four. This leaves the board
 	 *
 	 *   X O X
 	 *   X O O

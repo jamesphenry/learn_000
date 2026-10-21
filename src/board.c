@@ -50,10 +50,29 @@ void print_board(const board_t *board)
 	}
 }
 
+/*
+ * The board as the player to move sees it: their own marks are the ones and
+ * their opponent's are the others.
+ *
+ * A model that learns one thing about the game rather than two should not
+ * have to learn a new thing every time the turn changes, so the board is
+ * given to it the way the player sees it.
+ */
 void board_to_inputs(const board_t *board, double out[CELL_COUNT])
 {
-	for (int cell = 0; cell < CELL_COUNT; cell++)
-		out[cell] = (double)board->cells[cell];
+	int own = (board->current_player == 'X') ? VALUE_X : VALUE_O;
+
+	for (int cell = 0; cell < CELL_COUNT; cell++) {
+		cell_value_t value = board->cells[cell];
+
+		if (value == VALUE_EMPTY) {
+			out[cell] = 0.0;
+		} else if (value == own) {
+			out[cell] = 1.0;
+		} else {
+			out[cell] = -1.0;
+		}
+	}
 }
 
 bool place_mark(board_t *board, board_cell_t cell, char player_mark)

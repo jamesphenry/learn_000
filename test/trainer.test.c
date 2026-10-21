@@ -14,13 +14,6 @@
 #include "../src/rng.c"
 #include "../src/trainer.c"
 
-static bool nearly_equal(double actual, double expected)
-{
-	double diff = actual > expected ? actual - expected : expected - actual;
-
-	return diff < 1e-9;
-}
-
 /* A network whose output is a probability, so it answers with the worth of
  * a position. */
 static void build_the_test_network(network_t *network)
@@ -28,6 +21,21 @@ static void build_the_test_network(network_t *network)
 	network_init(network);
 	network_add_layer(network, CELL_COUNT, 2, ACTIVATION_CLAMP);
 	network_add_layer(network, 2, 1, ACTIVATION_SIGMOID);
+}
+
+/*
+ * A network whose hidden layer is awake, so that the worth of one position
+ * can differ from the worth of another.
+ */
+static void build_the_awake_network(network_t *network)
+{
+	network_init(network);
+	network_add_layer(network, CELL_COUNT, 2, ACTIVATION_CLAMP);
+	network_add_layer(network, 2, 1, ACTIVATION_SIGMOID);
+
+	/* the hidden unit reads the middle cell, and the output reads it */
+	network->layers[0].weights[0][CELL_CENTER] = 1.0;
+	network->layers[1].weights[0][0] = 1.0;
 }
 
 /* X takes the top row and wins. */
@@ -114,6 +122,23 @@ static char *test_it_refuses_a_network_that_does_not_answer_with_a_probability(v
 	return NULL;
 }
 
+/*
+ * The worth of the position after a given number of moves, which is the
+ * position the trainer saw at that point in the game.
+ */
+static double worth_after_moves(const network_t *network, const game_t *game, int moves)
+{
+	board_t positions[CELL_COUNT];
+	double inputs[CELL_COUNT];
+	double worth;
+
+	game_positions(game, positions);
+	board_to_inputs(&positions[moves], inputs);
+	network_forward(network, inputs, CELL_COUNT, &worth, 1);
+
+	return worth;
+}
+
 static char *test_a_win_raises_the_worth_of_the_position(void)
 {
 	network_t network;
@@ -122,16 +147,19 @@ static char *test_a_win_raises_the_worth_of_the_position(void)
 	double before;
 	double after;
 
-	build_the_test_network(&network);
+	build_the_awake_network(&network);
 	trainer_init(&trainer, &network, 0.1);
 	build_a_won_game(&game);
 
-	before = worth_of_the_empty_board(&network);
-	_it_should("start at a half", nearly_equal(before, 0.5));
+	before = worth_after_moves(&network, &game, 2);
 
 	trainer_train_game(&trainer, &game);
 
-	after = worth_of_the_empty_board(&network);
+	/* the position before X's first move was won by X, who was to move in
+	 * it, so it is worth more afterwards */
+	/* the position after two moves was X's to move in and X won it, so it is
+	 * worth more afterwards */
+	after = worth_after_moves(&network, &game, 2);
 	_it_should("raise the worth of the position", after > before);
 	_it_should("raise it towards one", after < 1.0);
 
@@ -146,7 +174,7 @@ static char *test_a_loss_lowers_the_worth_of_the_position(void)
 	double before;
 	double after;
 
-	build_the_test_network(&network);
+	build_the_awake_network(&network);
 	trainer_init(&trainer, &network, 0.1);
 	build_a_lost_game(&game);
 
@@ -154,7 +182,11 @@ static char *test_a_loss_lowers_the_worth_of_the_position(void)
 
 	trainer_train_game(&trainer, &game);
 
-	after = worth_of_the_empty_board(&network);
+	/* the position before X's first move was lost by X, who was to move in
+	 * it, so it is worth less afterwards */
+	/* the position after two moves was X's to move in and X lost it, so it
+	 * is worth less afterwards */
+	after = worth_after_moves(&network, &game, 2);
 	_it_should("lower the worth of the position", after < before);
 	_it_should("lower it towards zero", after > 0.0);
 
@@ -330,10 +362,12 @@ static char *test_the_activation_stops_the_error(void)
 
 	build_the_test_network(&network);
 
-	/* the hidden neuron reads the top left cell with a weight of its own, so
-	 * that its sum is well below the floor and it is switched off, and the
-	 * output reads the hidden value */
-	network.layers[0].weights[0][0] = -5.0;
+	/* the hidden neuron reads the top left cell with a weight of its own and
+	 * a bias of its own, so that its sum is well below the floor whichever
+	 * player is to move, and it is switched off, and the output reads the
+	 * hidden value */
+	network.layers[0].weights[0][0] = -1.0;
+	network.layers[0].biases[0] = -5.0;
 	network.layers[1].weights[0][0] = 1.0;
 
 	trainer_init(&trainer, &network, 0.1);
@@ -342,7 +376,7 @@ static char *test_the_activation_stops_the_error(void)
 	trainer_train_game(&trainer, &game);
 
 	_it_should("not change a hidden neuron that is switched off",
-		network.layers[0].weights[0][0] == -5.0);
+		network.layers[0].weights[0][0] == -1.0);
 
 	return NULL;
 }

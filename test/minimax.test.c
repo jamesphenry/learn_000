@@ -38,7 +38,7 @@ static char *test_the_empty_board_is_a_draw(void)
 
 	_it_should("be worth a draw", result.value == 0);
 	_it_should("still have a move to make", result.move >= 0 && result.move < CELL_COUNT);
-	_it_should("say X has a half of a chance", nearly_equal(minimax_x_win_chance(&perfect, &board), 0.5));
+	_it_should("say the player to move has a half of a chance", nearly_equal(minimax_worth(&perfect, &board), 0.5));
 
 	return NULL;
 }
@@ -53,7 +53,7 @@ static char *test_a_win_that_is_there_to_be_taken(void)
 
 	_it_should("be worth a win", result.value == 1);
 	_it_should("take the cell that wins", result.move == CELL_TOP_RIGHT);
-	_it_should("say X is certain to win", nearly_equal(minimax_x_win_chance(&perfect, &board), 1.0));
+	_it_should("say the player to move is certain to win", nearly_equal(minimax_worth(&perfect, &board), 1.0));
 
 	return NULL;
 }
@@ -73,7 +73,7 @@ static char *test_a_threat_that_has_to_be_blocked(void)
 
 	_it_should("be worth a draw", result.value == 0);
 	_it_should("block the top right", result.move == CELL_TOP_RIGHT);
-	_it_should("say X has a half of a chance", nearly_equal(minimax_x_win_chance(&perfect, &board), 0.5));
+	_it_should("say the player to move has a half of a chance", nearly_equal(minimax_worth(&perfect, &board), 0.5));
 
 	return NULL;
 }
@@ -96,7 +96,7 @@ static char *test_a_game_that_is_already_over(void)
 
 	_it_should("have no move to make", result.move == -1);
 	_it_should("be worth a loss for whoever is to move", result.value == -1);
-	_it_should("say X will not win", nearly_equal(minimax_x_win_chance(&perfect, &board), 0.0));
+	_it_should("say the player to move will not win", nearly_equal(minimax_worth(&perfect, &board), 0.0));
 
 	return NULL;
 }
@@ -171,7 +171,7 @@ static char *test_a_loss_for_the_player_to_move(void)
 	result = minimax_at(&perfect, &board);
 
 	_it_should("be worth a loss for whoever is to move", result.value == -1);
-	_it_should("say X is certain to win", nearly_equal(minimax_x_win_chance(&perfect, &board), 1.0));
+	_it_should("say the player to move will not win", nearly_equal(minimax_worth(&perfect, &board), 0.0));
 
 	return NULL;
 }

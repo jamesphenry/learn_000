@@ -13,37 +13,27 @@
 #include "../src/rng.c"
 
 /*
- * A network that says a position is worth more when X has the top row.
+ * A network that says a position is worth more when the player to move has
+ * the top left cell.
  *
- * The hidden layer has two units: one that fires when X has a mark in the
- * top row, and one that fires when O has a mark in the top row. The worth is
- * those two turned into a probability, and the first counts for more than
- * the second.
- *
- * So X wants the top row and O wants to keep away from it, which means the
- * two players want different cells and the policy can be caught taking the
- * wrong one.
+ * The hidden layer has two units: one that fires when the player to move has
+ * a mark in the top left, and one that fires when the other one has it. The
+ * board is always given to the model from the point of view of the player to
+ * move, so the first unit means the cell is the player's own.
  */
 static void build_the_test_network(network_t *network)
 {
 	network_init(network);
 	network_add_layer(network, CELL_COUNT, 2, ACTIVATION_RELU);
 
-	/* the first unit fires for X in the top row, and the more of it there
-	 * is the more it fires */
-	network->layers[0].weights[0][CELL_TOP_LEFT] = 3.0;
-	network->layers[0].weights[0][CELL_TOP] = 2.0;
-	network->layers[0].weights[0][CELL_TOP_RIGHT] = 1.0;
-
-	/* and the second for O in the top row */
-	network->layers[0].weights[1][CELL_TOP_LEFT] = -3.0;
-	network->layers[0].weights[1][CELL_TOP] = -2.0;
-	network->layers[0].weights[1][CELL_TOP_RIGHT] = -1.0;
+	network->layers[0].weights[0][CELL_TOP_LEFT] = 1.0;
+	network->layers[0].biases[0] = 0.5;
+	network->layers[0].weights[1][CELL_TOP_LEFT] = -1.0;
+	network->layers[0].biases[1] = 0.5;
 
 	network_add_layer(network, 2, 1, ACTIVATION_SIGMOID);
-	network->layers[1].weights[0][0] = 4.0;
-	network->layers[1].weights[0][1] = 1.0;
-	network->layers[1].biases[0] = -6.0;
+	network->layers[1].weights[0][0] = 40.0;
+	network->layers[1].biases[0] = -20.0;
 }
 
 /* A network that says every position is worth the same. */
@@ -116,7 +106,7 @@ static char *test_it_looks_ahead(void)
 	return NULL;
 }
 
-static char *test_o_wants_the_other_end_of_the_worth(void)
+static char *test_the_policy_takes_the_best_position_whichever_player_it_is(void)
 {
 	network_t network;
 	policy_t policy;
@@ -131,13 +121,9 @@ static char *test_o_wants_the_other_end_of_the_worth(void)
 
 	policy_select_move(&policy, &board, &move);
 
-	/* the worth says how well X would do, so O wants the other end of it,
-	 * and the top row is worth the least to O: every cell outside it leaves
-	 * the same worth, so any of them will do */
-	_it_should("keep away from the row X wants", move != CELL_TOP_LEFT);
-	_it_should("keep away from the whole of it",
-		move != CELL_TOP && move != CELL_TOP_RIGHT);
-	_it_should("take a cell outside it", move >= CELL_MIDDLE_LEFT);
+	/* the worth belongs to the player to move, so the policy takes the best
+	 * position whoever it is playing for */
+	_it_should("take the top left for O as well", move == CELL_TOP_LEFT);
 
 	return NULL;
 }
@@ -412,7 +398,7 @@ static char *run_tests()
 	_run_test(test_it_picks_an_empty_cell);
 	_run_test(test_it_never_picks_a_cell_that_is_taken);
 	_run_test(test_it_looks_ahead);
-	_run_test(test_o_wants_the_other_end_of_the_worth);
+	_run_test(test_the_policy_takes_the_best_position_whichever_player_it_is);
 	_run_test(test_it_picks_the_only_cell_left);
 	_run_test(test_it_gives_up_on_a_full_board);
 	_run_test(test_a_tie_is_broken_at_random);

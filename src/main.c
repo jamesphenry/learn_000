@@ -278,7 +278,8 @@ static void ask_the_minimax(void)
 
 	printf("\nthe same position, seen by the perfect player\n");
 	printf("  it plays cell %d, and the position is worth %d\n", result.move, result.value);
-	printf("  so X wins with a certainty of %g\n", minimax_x_win_chance(&oracle, &board));
+	printf("  so the player to move wins with a certainty of %g\n",
+	       minimax_worth(&oracle, &board));
 }
 
 /*

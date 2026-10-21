@@ -279,15 +279,6 @@ bool evaluate_initialisation(const network_t *network, initialisation_t *result)
 	return true;
 }
 
-/* The result of a game, on the same scale as the worth of a position. */
-static double worth_of_result(game_result_t outcome)
-{
-	if (outcome == GAME_X_WINS) return 1.0;
-	if (outcome == GAME_O_WINS) return 0.0;
-
-	return 0.5;
-}
-
 bool evaluate_network(const network_t *network, unsigned long long seed, int games,
                       evaluation_t *result)
 {
@@ -350,7 +341,7 @@ bool evaluate_network(const network_t *network, unsigned long long seed, int gam
 
 			if (!policy_position_worth(network, &positions[step], &worth)) continue;
 
-			actual = worth_of_result(outcome);
+			actual = game_worth_of_result(positions[step].current_player, outcome);
 
 			bucket = (int)(worth * EVALUATION_BUCKETS);
 			if (bucket < 0) bucket = 0;
@@ -366,10 +357,11 @@ bool evaluate_network(const network_t *network, unsigned long long seed, int gam
 
 			/* and how far it is from what the perfect player knows the
 			 * position to be worth */
-			truth_total += fabs(worth - minimax_x_win_chance(&oracle, &positions[step]));
+			truth_total += fabs(worth - minimax_worth(&oracle, &positions[step]));
 
 			if (outcome == GAME_X_WINS) result->moves_in_x_wins++;
 			if (outcome == GAME_DRAW) result->moves_in_draws++;
+			if (actual == 1.0) result->moves_won++;
 		}
 	}
 

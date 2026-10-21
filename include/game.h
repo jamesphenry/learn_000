@@ -28,6 +28,15 @@ void game_init(game_t *game);
 bool game_play_move(game_t *game, board_cell_t cell);
 bool game_is_over(const game_t *game);
 game_result_t game_result(const game_t *game);
+
+/*
+ * The worth of a result for the player who was to move: one if they won, a
+ * half if the game was drawn and nought if they lost.
+ *
+ * The worth of a position is always in the terms of the player to move, so
+ * that a model can learn one thing about the game rather than two.
+ */
+double game_worth_of_result(char player_to_move, game_result_t outcome);
 char game_turn(const game_t *game);
 game_result_t game_play(game_t *game, policy_t *x_policy, policy_t *o_policy);
 

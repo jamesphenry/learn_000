@@ -106,28 +106,19 @@ bool trainer_train_game(trainer_t *trainer, const game_t *game)
 	network = trainer->network;
 	if (network == NULL) return false;
 
-	/* the result of the game, on the same scale as the worth of a
-	 * position: one if X won, a half if it was drawn, nought if O won */
-	switch (game_result(game)) {
-	case GAME_X_WINS:
-		target = 1.0;
-		break;
-
-	case GAME_O_WINS:
-		target = 0.0;
-		break;
-
-	default:
-		target = 0.5;
-		break;
-	}
+	game_result_t outcome = game_result(game);
 
 	/* the game is played again from the start, so that every position is
 	 * seen as it was when the move was made */
 	game_positions(game, positions);
 
-	for (int step = 0; step < game->moves; step++)
+	/* and each position is worth what happened to the player who was to
+	 * move in it */
+	for (int step = 0; step < game->moves; step++) {
+		target = game_worth_of_result(positions[step].current_player, outcome);
+
 		train_step(trainer, &positions[step], target);
+	}
 
 	return true;
 }

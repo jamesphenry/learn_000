@@ -47,9 +47,10 @@ minimax_result_t minimax_at(minimax_t *minimax, const board_t *board);
 char minimax_winner(const board_t *board);
 
 /*
- * The chance that X wins from this position if both play perfectly: one, a
- * half or nought.
+ * The worth of this position to the player to move, if both play
+ * perfectly: one if they win it, a half if it is drawn and nought if they
+ * lose it.
  */
-double minimax_x_win_chance(minimax_t *minimax, const board_t *board);
+double minimax_worth(minimax_t *minimax, const board_t *board);
 
 #endif // MINIMAX_H

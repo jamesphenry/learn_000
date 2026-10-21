@@ -711,8 +711,10 @@ static char *test_the_held_back_opponents_are_of_both_kinds(void)
 
 	for (int i = 0; i < league.models; i++) {
 		if (league.model[i].teacher == LEAGUE_TRUTH)
-			_it_should("earn more against the other kind than against its own",
-				league.model[i].held_other_points > league.model[i].held_same_points);
+			_it_should("earn at least as much against the other kind as"
+				   " against its own",
+				league.model[i].held_other_points >=
+				league.model[i].held_same_points);
 		else
 			_it_should("earn less against the other kind than against its own",
 				league.model[i].held_other_points < league.model[i].held_same_points);

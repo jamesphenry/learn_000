@@ -164,19 +164,11 @@ minimax_result_t minimax_at(minimax_t *minimax, const board_t *board)
 	return result;
 }
 
-double minimax_x_win_chance(minimax_t *minimax, const board_t *board)
+double minimax_worth(minimax_t *minimax, const board_t *board)
 {
 	minimax_result_t result = minimax_at(minimax, board);
-	int cells[MINIMAX_CELLS];
 
-	if (result.value == 0) return 0.5;
-
-	minimax_read(board, cells);
-
-	/* the value is from the point of view of whoever is to move, and X wins
-	 * when the player to move is the one who loses */
-	if (minimax_turn(cells) == MINIMAX_X)
-		return (result.value > 0) ? 1.0 : 0.0;
-
-	return (result.value > 0) ? 0.0 : 1.0;
+	/* the value is already from the point of view of whoever is to move:
+	 * one for a win, nought for a draw and minus one for a loss */
+	return ((double)result.value + 1.0) / 2.0;
 }

@@ -71,7 +71,7 @@ static int arena_learn_from_the_truth(trainer_t *trainer, policy_t *policy, int 
 
 		for (int step = 0; step < game.moves; step++) {
 			if (!trainer_train_position(trainer, &positions[step],
-			                            minimax_x_win_chance(&oracle, &positions[step])))
+			                            minimax_worth(&oracle, &positions[step])))
 				return learned;
 		}
 

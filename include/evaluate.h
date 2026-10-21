@@ -31,9 +31,12 @@ typedef struct {
 	 * were measured over */
 	int moves;
 	/* the moves that were played in the games X won and in the games that
-	 * were drawn, which is what the probabilities are measured against */
+	 * were drawn */
 	int moves_in_x_wins;
 	int moves_in_draws;
+	/* and the moves the player to move went on to win, which is what the
+	 * worth of a position is measured against */
+	int moves_won;
 	/* How far the probabilities were from what happened, over every move
 	 * that was played: the mean of (probability - result) squared. */
 	double brier_score;

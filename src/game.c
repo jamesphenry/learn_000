@@ -64,6 +64,15 @@ game_result_t game_play(game_t *game, policy_t *x_policy, policy_t *o_policy)
 	return game_result(game);
 }
 
+double game_worth_of_result(char player_to_move, game_result_t outcome)
+{
+	if (outcome == GAME_DRAW) return 0.5;
+
+	if ((outcome == GAME_X_WINS) == (player_to_move == 'X')) return 1.0;
+
+	return 0.0;
+}
+
 void game_positions(const game_t *game, board_t positions[CELL_COUNT])
 {
 	game_t replay;

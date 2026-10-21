@@ -32,12 +32,6 @@ bool policy_init(policy_t *policy, network_t *network, unsigned long long seed,
 	return true;
 }
 
-/* The scores say how well X would do, so O wants the other end of them. */
-static double preference_of(const board_t *board, double score)
-{
-	return (board->current_player == 'X') ? score : -score;
-}
-
 /* The cells that are still empty. */
 static int legal_cells(const board_t *board, board_cell_t *cells)
 {
@@ -54,6 +48,7 @@ static int legal_cells(const board_t *board, board_cell_t *cells)
 bool policy_select_move(policy_t *policy, const board_t *board, board_cell_t *move)
 {
 	double scores[CELL_COUNT] = { 0.0 };
+	double preference[CELL_COUNT] = { 0.0 };
 	double weights[CELL_COUNT];
 	board_cell_t cells[CELL_COUNT];
 	int count;
@@ -78,12 +73,15 @@ bool policy_select_move(policy_t *policy, const board_t *board, board_cell_t *mo
 		if (!policy_position_worth(policy->network, &next, &scores[cells[i]])) return false;
 	}
 
-	biggest = preference_of(board, scores[cells[0]]);
-	for (int i = 1; i < count; i++) {
-		double preference = preference_of(board, scores[cells[i]]);
+	/* each successor is worth what the opponent would get out of it, so the
+	 * player to move wants the smallest of them */
+	for (int i = 0; i < count; i++)
+		preference[i] = -scores[cells[i]];
 
-		if (preference > biggest)
-			biggest = preference;
+	biggest = preference[0];
+	for (int i = 1; i < count; i++) {
+		if (preference[i] > biggest)
+			biggest = preference[i];
 	}
 
 	if (policy->temperature <= 0.0) {
@@ -91,14 +89,14 @@ bool policy_select_move(policy_t *policy, const board_t *board, board_cell_t *mo
 		int ties = 0;
 
 		for (int i = 0; i < count; i++) {
-			if (preference_of(board, scores[cells[i]]) == biggest)
+			if (preference[i] == biggest)
 				ties++;
 		}
 
 		int choice = rng_next_int(&policy->rng, ties);
 
 		for (int i = 0; i < count; i++) {
-			if (preference_of(board, scores[cells[i]]) != biggest) continue;
+			if (preference[i] != biggest) continue;
 
 			if (choice == 0) {
 				*move = cells[i];
@@ -113,8 +111,7 @@ bool policy_select_move(policy_t *policy, const board_t *board, board_cell_t *mo
 
 	/* a softmax over the legal cells, shifted so the largest one is zero */
 	for (int i = 0; i < count; i++) {
-		weights[i] = exp((preference_of(board, scores[cells[i]]) - biggest) /
-		                policy->temperature);
+		weights[i] = exp((preference[i] - biggest) / policy->temperature);
 		total += weights[i];
 	}
 
