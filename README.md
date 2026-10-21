@@ -87,6 +87,22 @@ The results, over five runs with a seed of their own:
   maximum  won the round robin 0 times out of 5;  it won 700 and lost 918
 ```
 
+## A league of a hundred models
+
+A hundred models, each with a seed of its own, every one playing every
+other one, half of them taught by the perfect player and half learning from
+their own games. It produces **three rankings that do not agree**:
+
+| ranking | what it tells you |
+|---|---|
+| training | how well did the model learn from its training experience? |
+| league | how well does it perform against unfamiliar opponents? |
+| general | does its performance hold up against a different kind of model? |
+
+The champion was eleventh by the training measure and first by the league;
+the model that topped the training measure came thirty-second. The whole
+of it is written up in [LEAGUE.md](LEAGUE.md).
+
 ## Two models and nobody to tell them the answers
 
 The arena above is taught by the perfect player. The duel is not: two
@@ -145,6 +161,7 @@ learn_000
 │   └── *.test.c
 ├── CHANGELOG.md
 ├── FINDINGS.md
+├── LEAGUE.md
 ├── LICENSE.md
 ├── Makefile
 ├── README.md

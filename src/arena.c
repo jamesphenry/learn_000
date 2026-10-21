@@ -534,10 +534,20 @@ bool arena_league(const arena_settings_t *settings, int models,
 			same_kind = (league->model[i].teacher == league->model[j].teacher);
 
 			if (same_kind) {
+				league->model[i].same_wins += match.first_wins;
+				league->model[i].same_draws += match.draws;
 				league->model[i].same_points += first_points;
+
+				league->model[j].same_wins += match.second_wins;
+				league->model[j].same_draws += match.draws;
 				league->model[j].same_points += second_points;
 			} else {
+				league->model[i].other_wins += match.first_wins;
+				league->model[i].other_draws += match.draws;
 				league->model[i].other_points += first_points;
+
+				league->model[j].other_wins += match.second_wins;
+				league->model[j].other_draws += match.draws;
 				league->model[j].other_points += second_points;
 			}
 		}

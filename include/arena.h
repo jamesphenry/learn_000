@@ -209,8 +209,10 @@ typedef struct {
 	int draws;
 	int losses;
 	int points;         /* three for a win, one for a draw */
-	int same_points;    /* the points against the models of its own kind */
-	int other_points;   /* and against the models of the other kind */
+
+	/* and the same, split by the kind of opponent */
+	int same_wins, same_draws, same_points;
+	int other_wins, other_draws, other_points;
 } league_model_t;
 
 /* A whole league. */
