@@ -2,6 +2,7 @@
 #include <string.h>
 #include "evaluate.h"
 #include "game.h"
+#include "judge.h"
 #include "minimax.h"
 #include "policy.h"
 
@@ -18,6 +19,57 @@ static bool score_position(const network_t *network, const board_t *board,
 	board_to_inputs(board, inputs);
 
 	return network_forward(network, inputs, CELL_COUNT, scores, CELL_COUNT);
+}
+
+bool evaluate_against(const network_t *first, const network_t *second,
+                      unsigned long long seed, int games, double temperature,
+                      match_result_t *result)
+{
+	policy_t first_policy;
+	policy_t second_policy;
+	game_t game;
+	judgement_t verdict;
+	game_result_t outcome;
+	int first_wins = 0;
+	int draws = 0;
+	int second_wins = 0;
+	int flagged = 0;
+
+	if (first == NULL || second == NULL || result == NULL || games < 1) return false;
+
+	memset(result, 0, sizeof(*result));
+
+	policy_init(&first_policy, (network_t *)first, seed, temperature);
+	policy_init(&second_policy, (network_t *)second, seed + 1, temperature);
+
+	for (int i = 0; i < games; i++) {
+		int first_is_x = (i % 2) == 0;
+
+		/* each network takes one colour and then the other, so that
+		 * neither of them gets the first move every time */
+		if (first_is_x)
+			outcome = game_play(&game, &first_policy, &second_policy);
+		else
+			outcome = game_play(&game, &second_policy, &first_policy);
+
+		/* and the referee looks over it */
+		if (!judge_game(&game, &verdict)) {
+			flagged++;
+			continue;
+		}
+
+		if (outcome == GAME_DRAW) draws++;
+		else if ((outcome == GAME_X_WINS) == first_is_x) first_wins++;
+		else second_wins++;
+	}
+
+	result->games = games;
+	result->first_wins = first_wins;
+	result->draws = draws;
+	result->second_wins = second_wins;
+	result->flagged = flagged;
+
+	return true;
 }
 
 bool evaluate_network(const network_t *network, unsigned long long seed, int games,

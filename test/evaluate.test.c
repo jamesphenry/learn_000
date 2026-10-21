@@ -8,6 +8,7 @@
 #include "../src/board.c"
 #include "../src/evaluate.c"
 #include "../src/game.c"
+#include "../src/judge.c"
 #include "../src/minimax.c"
 #include "../src/layer.c"
 #include "../src/network.c"

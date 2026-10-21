@@ -48,6 +48,27 @@ typedef struct {
 } evaluation_t;
 
 /*
+ * How a match between two networks went.
+ */
+typedef struct {
+	int games;
+	int first_wins;
+	int draws;
+	int second_wins;
+	int flagged;  /* the games the referee did not accept */
+} match_result_t;
+
+/*
+ * Plays two networks against each other, with each of them taking one
+ * colour, and says how the first one did. Every game is put past the
+ * referee, so a model that played a move that was not allowed is counted
+ * and the game is left out of the tally.
+ */
+bool evaluate_against(const network_t *first, const network_t *second,
+                      unsigned long long seed, int games, double temperature,
+                      match_result_t *result);
+
+/*
  * Plays games against an opponent that plays at random, with the network
  * taking one colour and then the other, and measures how the network did.
  *
