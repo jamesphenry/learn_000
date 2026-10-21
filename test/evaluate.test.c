@@ -207,6 +207,118 @@ static char *test_the_truth_error_is_measured_against_the_perfect_player(void)
 	return NULL;
 }
 
+/*
+ * A network that plays the cells in a fixed order, so that the game it
+ * plays is the same every time and can be worked out by hand. X plays the
+ * cell at the top of the order and O the one at the bottom, so the game is
+ *
+ *   X plays 0, O plays 8, X plays 1, O plays 7, X plays 2
+ *
+ * and X has the top row and wins.
+ */
+static void build_the_ordered_network(network_t *network)
+{
+	const int order[CELL_COUNT] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
+
+	network_init(network);
+	network_add_layer(network, CELL_COUNT, 1, ACTIVATION_CLAMP);
+	network_add_layer(network, 1, CELL_COUNT, ACTIVATION_SIGMOID);
+
+	/* the hidden value is always one */
+	network->layers[0].biases[0] = 1.0;
+
+	/* and the cell played first gets the highest score */
+	for (int place = 0; place < CELL_COUNT; place++)
+		network->layers[1].weights[order[place]][0] = (double)(CELL_COUNT - place);
+}
+
+static char *test_the_skill_measurement_refuses_bad_arguments(void)
+{
+	network_t network;
+	skill_t skill;
+
+	build_the_ordered_network(&network);
+
+	_it_should("refuse a null network", !evaluate_skill(NULL, 1, 10, &skill));
+	_it_should("refuse a null result", !evaluate_skill(&network, 1, 10, NULL));
+	_it_should("refuse no games", !evaluate_skill(&network, 1, 0, &skill));
+
+	return NULL;
+}
+
+static char *test_the_skill_measurement_counts_the_moves(void)
+{
+	network_t network;
+	skill_t skill;
+
+	build_the_ordered_network(&network);
+
+	evaluate_skill(&network, 1, 10, &skill);
+
+	/* the game is over after five moves, and it is the same game every
+	 * time, so ten games are fifty moves */
+	_it_should("count every move that was played", skill.moves == 50);
+	_it_should("count every move once", skill.kept + skill.gave_away == skill.moves);
+	_it_should("never throw more wins away than it gave away",
+		skill.threw_wins <= skill.gave_away);
+
+	return NULL;
+}
+
+static char *test_the_skill_measurement_says_what_was_given_away(void)
+{
+	network_t network;
+	skill_t skill;
+
+	build_the_ordered_network(&network);
+
+	evaluate_skill(&network, 1, 10, &skill);
+
+	/* the five moves of the game, and what each one gave away:
+	 *
+	 *   X plays 0, from a position worth nothing, and it is still worth
+	 *     nothing: nothing given away
+	 *   O plays 8, from a position worth nothing, and now X is winning:
+	 *     one given away
+	 *   X plays 1, from a position worth a win, and now X is losing:
+	 *     two given away, and it was a win that was thrown away
+	 *   O plays 7, from a position worth a win for X, and now X is losing:
+	 *     two given away, and it was a win that was thrown away
+	 *   X plays 2, from a position worth a win, and it is still a win:
+	 *     nothing given away
+	 */
+	_it_should("keep the value twice in each game", skill.kept == 20);
+	_it_should("give value away three times in each game", skill.gave_away == 30);
+	_it_should("throw two wins away in each game", skill.threw_wins == 20);
+	_it_should("give five points of value away in each game",
+		nearly_equal(skill.value_lost, 50.0));
+
+	return NULL;
+}
+
+static char *test_the_games_against_the_perfect_player(void)
+{
+	network_t network;
+	perfect_result_t result;
+
+	build_the_ordered_network(&network);
+
+	evaluate_against_perfect(&network, 1, 10, &result);
+
+	_it_should("count the games", result.games == 10);
+	_it_should("count every game once",
+		result.wins + result.draws + result.losses == 10);
+
+	/* the network takes X in five of the games and O in five, and it wins
+	 * as X because it takes the top row, and it loses as O for the same
+	 * reason */
+	_it_should("win as X", result.wins == 5);
+	_it_should("lose as O", result.losses == 5);
+	_it_should("draw none", result.draws == 0);
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	_run_test(test_it_refuses_bad_arguments);
@@ -215,6 +327,10 @@ static char *run_tests()
 	_run_test(test_the_buckets_hold_the_observations);
 	_run_test(test_the_same_seed_gives_the_same_result);
 	_run_test(test_the_truth_error_is_measured_against_the_perfect_player);
+	_run_test(test_the_skill_measurement_refuses_bad_arguments);
+	_run_test(test_the_skill_measurement_counts_the_moves);
+	_run_test(test_the_skill_measurement_says_what_was_given_away);
+	_run_test(test_the_games_against_the_perfect_player);
 
 	return NULL;
 }

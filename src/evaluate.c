@@ -72,6 +72,140 @@ bool evaluate_against(const network_t *first, const network_t *second,
 	return true;
 }
 
+bool evaluate_skill(const network_t *network, unsigned long long seed, int games,
+                    skill_t *result)
+{
+	policy_t policy;
+	game_t game;
+	board_t positions[CELL_COUNT];
+	int moves = 0;
+	int kept = 0;
+	int gave_away = 0;
+	int threw_wins = 0;
+	double value_lost = 0.0;
+
+	if (network == NULL || result == NULL || games < 1) return false;
+
+	/* the caller may hand over a result that has been used before */
+	memset(result, 0, sizeof(*result));
+
+	policy_init(&policy, (network_t *)network, seed, 0.0);
+
+	for (int i = 0; i < games; i++) {
+		game_play(&game, &policy, &policy);
+		game_positions(&game, positions);
+
+		for (int step = 0; step < game.moves; step++) {
+			minimax_result_t perfect;
+			minimax_result_t then;
+			board_t after;
+			int lost;
+
+			perfect = minimax_at(&positions[step]);
+
+			/* the game was over, so no move was left to make */
+			if (perfect.move < 0) continue;
+
+			/* the position the move left behind */
+			after = positions[step];
+			after.cells[game.history[step]] = encode_mark(after.current_player);
+			then = minimax_at(&after);
+
+			/* the perfect player knows the position is worth perfect.value
+			 * to the player to move, and the move that was played left it
+			 * worth minus then.value to that same player, because the
+			 * other one is to move now */
+			lost = perfect.value + then.value;
+
+			moves++;
+			value_lost += lost;
+
+			if (lost == 0) {
+				kept++;
+			} else {
+				gave_away++;
+
+				/* a win that was there and was not taken */
+				if (perfect.value == 1) threw_wins++;
+			}
+		}
+	}
+
+	result->moves = moves;
+	result->kept = kept;
+	result->gave_away = gave_away;
+	result->threw_wins = threw_wins;
+	result->value_lost = value_lost;
+
+	return true;
+}
+
+/* Whether the game is over, judging by the board alone. */
+static bool board_is_finished(const board_t *board)
+{
+	if (detect_win(board, 'X')) return true;
+	if (detect_win(board, 'O')) return true;
+
+	return board_is_full(board);
+}
+
+bool evaluate_against_perfect(const network_t *network, unsigned long long seed,
+                              int games, perfect_result_t *result)
+{
+	policy_t policy;
+	int wins = 0;
+	int draws = 0;
+	int losses = 0;
+
+	if (network == NULL || result == NULL || games < 1) return false;
+
+	/* the caller may hand over a result that has been used before */
+	memset(result, 0, sizeof(*result));
+
+	policy_init(&policy, (network_t *)network, seed, 0.0);
+
+	for (int i = 0; i < games; i++) {
+		board_t board;
+		char winner;
+		int network_is_x = (i % 2) == 0;
+
+		board_init(&board);
+
+		while (!board_is_finished(&board)) {
+			board_cell_t move;
+
+			if ((board.current_player == 'X') == (network_is_x != 0)) {
+				if (!policy_select_move(&policy, &board, &move)) break;
+			} else {
+				minimax_result_t perfect = minimax_at(&board);
+
+				if (perfect.move < 0) break;
+				move = (board_cell_t)perfect.move;
+			}
+
+			place_mark(&board, move, board.current_player);
+		}
+
+		winner = detect_win(&board, 'X') ? 'X' :
+		         detect_win(&board, 'O') ? 'O' : 0;
+
+		if (winner == 0) {
+			draws++;
+		} else if (winner == (network_is_x ? 'X' : 'O')) {
+			wins++;
+		} else {
+			losses++;
+		}
+	}
+
+	result->games = games;
+	result->wins = wins;
+	result->draws = draws;
+	result->losses = losses;
+
+	return true;
+}
+
 bool evaluate_network(const network_t *network, unsigned long long seed, int games,
                       evaluation_t *result)
 {

@@ -59,6 +59,33 @@ typedef struct {
 } match_result_t;
 
 /*
+ * How much value a network gave away.
+ *
+ * Every position is worth something to the player to move: a win, a draw or
+ * a loss. The best move there is keeps that worth; any other move leaves
+ * the position worth less. This counts the moves that kept the worth and
+ * the moves that gave it away.
+ */
+typedef struct {
+	int moves;        /* the moves that were played */
+	int kept;         /* the moves that left the position worth as much as the best */
+	int gave_away;    /* the moves that left it worth less */
+	int threw_wins;   /* the moves that gave away a win that was there */
+	double value_lost; /* the worth given away, over all the moves */
+} skill_t;
+
+/*
+ * How a network did against the perfect player, which never makes a
+ * mistake. The network takes one colour and then the other.
+ */
+typedef struct {
+	int games;
+	int wins;
+	int draws;
+	int losses;
+} perfect_result_t;
+
+/*
  * Plays two networks against each other, with each of them taking one
  * colour, and says how the first one did. Every game is put past the
  * referee, so a model that played a move that was not allowed is counted
@@ -67,6 +94,21 @@ typedef struct {
 bool evaluate_against(const network_t *first, const network_t *second,
                       unsigned long long seed, int games, double temperature,
                       match_result_t *result);
+
+/*
+ * Plays games against itself and says how much value it gave away: for
+ * every move it played, how much the position was worth less than the
+ * best move there was. This is exact, so unlike a win rate it does not
+ * wander from seed to seed.
+ */
+bool evaluate_skill(const network_t *network, unsigned long long seed, int games,
+                    skill_t *result);
+
+/*
+ * Plays against the perfect player and says how it did.
+ */
+bool evaluate_against_perfect(const network_t *network, unsigned long long seed,
+                              int games, perfect_result_t *result);
 
 /*
  * Plays games against an opponent that plays at random, with the network
