@@ -82,6 +82,7 @@ make clean
 learn_000
 ├── include
 │   ├── board.h
+│   ├── game.h
 │   ├── layer.h
 │   ├── main.h
 │   ├── network.h
@@ -91,6 +92,7 @@ learn_000
 │   └── ...
 ├── src
 │   ├── board.c
+│   ├── game.c
 │   ├── layer.c
 │   ├── main.c
 │   ├── network.c
@@ -100,6 +102,7 @@ learn_000
 │   └── ...
 ├── test
 │   ├── board.test.c
+│   ├── game.test.c
 │   ├── layer.test.c
 │   ├── main.test.c
 │   ├── network.test.c

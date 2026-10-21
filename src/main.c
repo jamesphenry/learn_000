@@ -2,7 +2,9 @@
 #include <stdlib.h>
 #include "main.h"
 #include "board.h"
+#include "game.h"
 #include "network.h"
+#include "policy.h"
 
 int greet(char *message)
 {
@@ -144,6 +146,39 @@ static void run_the_experiments(void)
 	print_scores("a board with X and O on the top row", scores);
 }
 
+/*
+ * A game played by the network on both sides. The network was told to like
+ * the top right cell, and O does the opposite, so the two of them end up
+ * fighting over it.
+ */
+static void play_a_game(void)
+{
+	network_t network;
+	policy_t policy;
+	game_t game;
+	game_result_t result;
+
+	network_init(&network);
+	network_add_layer(&network, CELL_COUNT, 2);
+	network.layers[0].weights[0][0] = 1.0;
+	network.layers[0].weights[0][1] = 1.0;
+	network.layers[0].weights[1][2] = -1.0;
+	network.layers[0].biases[1] = 0.5;
+
+	network_add_layer(&network, 2, CELL_COUNT);
+	network.layers[1].weights[2][0] = 1.0;
+	network.layers[1].weights[2][1] = -1.0;
+
+	policy_init(&policy, &network, 1, 0.1);
+	result = game_play(&game, &policy, &policy);
+
+	print_board(&game.board);
+
+	printf("%d moves, and the game %s\n", game.moves,
+	       result == GAME_X_WINS ? "went to X" :
+	       result == GAME_O_WINS ? "went to O" : "was drawn");
+}
+
 int main(int argc, char *argv[], char *env[]) {
 	UNUSED(argc);
 	UNUSED(argv);
@@ -152,6 +187,9 @@ int main(int argc, char *argv[], char *env[]) {
 	greet("Hello, World!");
 	score_a_game();
 	run_the_experiments();
+
+	printf("\n");
+	play_a_game();
 
 	return EXIT_SUCCESS;
 }

@@ -299,11 +299,35 @@ static char *test_a_tie_is_broken_at_random(void)
 	return NULL;
 }
 
+static char *test_o_wants_the_other_end_of_the_scores(void)
+{
+	network_t network;
+	policy_t policy;
+	board_t board;
+	board_cell_t move;
+
+	build_the_test_network(&network, CELL_CENTER);
+	policy_init(&policy, &network, 1, 0.0);
+
+	board_init(&board);
+	place_mark(&board, CELL_TOP_LEFT, 'X');
+
+	/* the scores say how well X would do, so O wants the other end */
+	board.current_player = 'O';
+
+	policy_select_move(&policy, &board, &move);
+
+	_it_should("not take the cell X wants", move != CELL_CENTER);
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	_run_test(test_it_picks_an_empty_cell);
 	_run_test(test_it_never_picks_a_cell_that_is_taken);
 	_run_test(test_it_picks_the_best_cell);
+	_run_test(test_o_wants_the_other_end_of_the_scores);
 	_run_test(test_it_picks_the_only_cell_left);
 	_run_test(test_it_gives_up_on_a_full_board);
 	_run_test(test_a_tie_is_broken_at_random);
