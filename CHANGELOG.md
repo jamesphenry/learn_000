@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added the game of Nim, in `games/nim/`, with its own tests.
   - Added a league of a hundred models in the game of Nim, which is written
     up in `LEAGUE.md`.
+  - Added the whole table of the league to the demonstration, which comes out
+    of it when the word `table` is given as well.
   - Added a perfect player that needs no memory of its own: the perfect
     player for Nim works the answer out from the exclusive or of the heaps.
   - Added `make test-valgrind`, which runs the tests under valgrind and says

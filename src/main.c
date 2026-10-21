@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "main.h"
 #include "arena.h"
 #include "board.h"
@@ -491,6 +492,42 @@ static void run_the_duel(const game_t *game, const oracle_t *oracle)
 }
 
 /*
+ * Where a model is in one of the three rankings of a league.
+ */
+static int place_of(const arena_league_t *league, const int *ranking, int model)
+{
+	for (int place = 0; place < league->models; place++) {
+		if (ranking[place] == model) return place + 1;
+	}
+
+	return 0;
+}
+
+/*
+ * The whole table of a league: every model, in the order it finished, with
+ * the place it took in the other two rankings beside it.
+ */
+static void print_the_league_table(const arena_league_t *league)
+{
+	printf("\n  %-6s %6s %8s %10s %8s %6s %6s %6s %8s %8s\n",
+	       "place", "seed", "taught", "gave away", "points", "won", "drawn",
+	       "lost", "training", "general");
+
+	for (int place = 0; place < league->models; place++) {
+		int model = league->ranking_league[place];
+		const league_model_t *record = &league->model[model];
+
+		printf("  %-6d %6llu %8s %10.3f %8d %6d %6d %6d %8d %8d\n",
+		       place + 1, record->seed,
+		       record->teacher == LEAGUE_TRUTH ? "truth" : "self",
+		       record->training_value_lost, record->points,
+		       record->wins, record->draws, record->losses,
+		       place_of(league, league->ranking_training, model),
+		       place_of(league, league->ranking_general, model));
+	}
+}
+
+/*
  * A league: a number of models, each with a seed of its own, every model
  * playing every other one, and the points added up.
  *
@@ -500,7 +537,7 @@ static void run_the_duel(const game_t *game, const oracle_t *oracle)
  * did in the league, and how well it did against models of the other kind.
  */
 static void run_the_league(const game_t *game, const oracle_t *oracle,
-                           const char *name, int models)
+                           const char *name, int models, bool table)
 {
 	arena_settings_t settings;
 	arena_league_t league;
@@ -541,12 +578,15 @@ static void run_the_league(const game_t *game, const oracle_t *oracle,
 	       " %d lost\n", league.champion, league.model[league.champion].seed,
 	       league.model[league.champion].wins, league.model[league.champion].draws,
 	       league.model[league.champion].losses);
+
+	if (table) print_the_league_table(&league);
 }
 
 int main(int argc, char *argv[], char *env[]) {
 	game_t game;
 	oracle_t oracle;
 	int models = argc > 1 ? atoi(argv[1]) : 12;
+	bool table = argc > 2 && strcmp(argv[2], "table") == 0;
 
 	UNUSED(env);
 
@@ -588,7 +628,7 @@ int main(int argc, char *argv[], char *env[]) {
 	run_the_duel(&game, &oracle);
 
 	printf("\n");
-	run_the_league(&game, &oracle, "tic-tac-toe", models);
+	run_the_league(&game, &oracle, "tic-tac-toe", models, table);
 
 	oracle_stop(&oracle);
 
@@ -617,7 +657,7 @@ int main(int argc, char *argv[], char *env[]) {
 	run_the_arena(&game, &oracle);
 
 	printf("\n");
-	run_the_league(&game, &oracle, "Nim", models);
+	run_the_league(&game, &oracle, "Nim", models, table);
 
 	oracle_stop(&oracle);
 
