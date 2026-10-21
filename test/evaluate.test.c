@@ -266,6 +266,75 @@ static void build_the_ordered_network(network_t *network)
 	network->layers[1].weights[0][0] = 1.0;
 }
 
+static char *test_a_network_that_has_learned_nothing_yet(void)
+{
+	network_t network;
+	initialisation_t start;
+
+	/* a network with every weight and bias at zero */
+	network_init(&network);
+	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_RELU);
+	network_add_layer(&network, 2, 1, ACTIVATION_SIGMOID);
+
+	_it_should("look at it", evaluate_initialisation(&network, &start));
+
+	_it_should("see no sums at all in the hidden layer",
+		nearly_equal(start.hidden_lowest, 0.0) && nearly_equal(start.hidden_highest, 0.0));
+	_it_should("see no sum at the output either",
+		nearly_equal(start.output_lowest, 0.0) && nearly_equal(start.output_highest, 0.0));
+	_it_should("say a half", nearly_equal(start.worth, 0.5));
+	_it_should("be pulled just as hard towards a win as towards a loss",
+		nearly_equal(start.gradient_to_one, 0.5) &&
+		nearly_equal(start.gradient_to_zero, 0.5));
+
+	return NULL;
+}
+
+static char *test_a_network_with_every_weight_the_same(void)
+{
+	network_t network;
+	initialisation_t start;
+
+	/* a network with every weight and bias at one, and as many hidden
+	 * units as the arena gives it */
+	network_init(&network);
+	network_add_layer(&network, CELL_COUNT, 16, ACTIVATION_RELU);
+	network_add_layer(&network, 16, 1, ACTIVATION_SIGMOID);
+	network_fill_maximum(&network, 1.0);
+
+	_it_should("look at it", evaluate_initialisation(&network, &start));
+
+	/* every hidden unit sees exactly the same thing */
+	_it_should("see the same sum everywhere in the hidden layer",
+		nearly_equal(start.hidden_lowest, start.hidden_highest));
+
+	/* every hidden unit says one, and there are sixteen of them, and the
+	 * output's bias is one as well */
+	_it_should("see a sum of seventeen at the output",
+		nearly_equal(start.output_lowest, 17.0) &&
+		nearly_equal(start.output_highest, 17.0));
+	_it_should("say one", start.worth > 0.99);
+	_it_should("have no pull at all towards a win",
+		start.gradient_to_one < 0.01);
+	_it_should("be pulled hard towards a loss",
+		start.gradient_to_zero > 0.99);
+
+	return NULL;
+}
+
+static char *test_the_initialisation_refuses_bad_arguments(void)
+{
+	network_t network;
+	initialisation_t start;
+
+	build_the_test_network(&network);
+
+	_it_should("refuse a null network", !evaluate_initialisation(NULL, &start));
+	_it_should("refuse nowhere to put the result", !evaluate_initialisation(&network, NULL));
+
+	return NULL;
+}
+
 static char *test_the_skill_measurement_refuses_bad_arguments(void)
 {
 	network_t network;
@@ -405,6 +474,9 @@ static char *run_tests()
 	_run_test(test_the_buckets_hold_the_observations);
 	_run_test(test_the_same_seed_gives_the_same_result);
 	_run_test(test_the_truth_error_is_measured_against_the_perfect_player);
+	_run_test(test_a_network_that_has_learned_nothing_yet);
+	_run_test(test_a_network_with_every_weight_the_same);
+	_run_test(test_the_initialisation_refuses_bad_arguments);
 	_run_test(test_the_skill_measurement_refuses_bad_arguments);
 	_run_test(test_the_skill_measurement_counts_the_moves);
 	_run_test(test_the_skill_measurement_says_what_was_given_away);

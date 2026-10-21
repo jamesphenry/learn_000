@@ -354,6 +354,20 @@ static void run_the_arena(void)
 		printf("\n");
 	}
 
+	printf("\n  what they looked like before they learned anything\n");
+	printf("  %-8s %16s %16s %9s %10s %10s\n", "started", "the hidden sums",
+	       "the output's sum", "it says", "to a win", "to a loss");
+
+	for (int scheme = 0; scheme < ARENA_SCHEMES; scheme++) {
+		initialisation_t start = survey.reports[0].results[scheme].initialisation;
+
+		printf("  %-8s %6.2f to %-6.2f %6.2f to %-6.2f %9.3f %10.3f %10.3f\n",
+		       names[scheme],
+		       start.hidden_lowest, start.hidden_highest,
+		       start.output_lowest, start.output_highest, start.worth,
+		       start.gradient_to_one, start.gradient_to_zero);
+	}
+
 	printf("\n  over all %d runs\n", survey.runs);
 
 	for (int scheme = 0; scheme < ARENA_SCHEMES; scheme++) {

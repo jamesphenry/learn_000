@@ -1,82 +1,93 @@
-# c-skeleton
+# learn_000
 
-A minimalist project skeleton for C development. This repository provides a basic structure to set up C projects quickly and efficiently.
+A small C project that learns to play tic-tac-toe, and measures what it has
+learned. It exists to answer one question carefully: **which way of starting
+a network off learns the game best?**
 
-## Introduction
+The answer only means something if the fight is fair, so all the models get
+the same architecture, the same training algorithm, the same number of
+games and the same evaluation set, and they are measured before and after
+training rather than on the final win rate alone.
 
-c-skeleton is a simple and minimalistic starting point for C projects. It includes the essential files and directory structure needed to begin developing C applications.
+## The model
 
-## Features
+The model answers with the worth of a position to X: one if X wins it, a
+half if it is drawn and nought if O wins it. The policy looks one cell
+ahead, asks what each cell would leave behind, and takes the best of them —
+the highest for X and the lowest for O. That is the same shape as the
+perfect player, so what the model says about a position can be compared
+straight against what the perfect player knows about it.
 
-- Basic project structure
-- Flexible Makefile for building the project
-- Sample source files
-- Directory setup for source, header, and test files
+The model is taught by the perfect player, which says what each position it
+visits is worth, or by its own games, where the result of the game is the
+target. The second has a moving target and learns more slowly; both are in
+the arena.
 
-## Prerequisites
+## The pieces
 
-Ensure you have the following installed on your system:
+| module | what it is for |
+|---|---|
+| `board` | the board, its cells and whether somebody has won. No global state, so any number of games can be in flight at once. |
+| `neuron` | a weighted sum, and the activations: a clamp, a rectified unit and a sigmoid. |
+| `layer` | a layer of neurons with a chosen activation. |
+| `network` | layers joined up, and the two ways of filling them in: at random, or all at the same value. |
+| `rng` | a seeded generator, so every run can be repeated. |
+| `policy` | a board and a network, and the move they make together. |
+| `game` | a game being played, with the moves that were made and the moves that were offered. |
+| `trainer` | teaches a network the worth of a position. |
+| `evaluate` | measures a model: its win rate, how honest its probabilities are, how much worth it gives away, and how it does against the perfect player. |
+| `minimax` | the perfect player, and what a position is really worth. It keeps what it has worked out. |
+| `judge` | a referee, which checks that every move offered was allowed and that the result agrees with the perfect player's reckoning. |
+| `arena` | builds the models, teaches them, measures them, and has them play each other. |
 
-- **Standard C Compiler**
-- **Make**
-- **AWK** (optional, for `make help`)
-- **fswatch** (optional, for `make watch`)
-
-## Installation
-
-Clone the repository to your local machine:
-
-```sh
-git clone --recurse-submodules https://github.com/jonruttan/c-skeleton.git
-cd c-skeleton
-```
-
-## Usage
-
-To build the project, simply run:
-
-```sh
-make
-```
-
-For help on make options, run:
-
-```sh
-make help
-```
-
-
-To run all tests:
+## Building and testing
 
 ```sh
-make test
+make            # build
+make test       # run every test
+make test-asan  # run every test under the address and behaviour sanitisers
+make test-quick # run every test without the memory checker
+make lint       # check the sources
+make run        # build and run the demonstration
 ```
 
-To run the tests with AddressSanitizer and UndefinedBehaviorSanitizer:
+To run one test:
 
 ```sh
-make test-asan
+TST=test/board.test.c make test
 ```
 
-To run a specific test:
+## What we found
 
-```sh
-TST=test/main.test.c make test
+The short version: **a network started at random learns the game; one
+started at zero never does; one started with every weight at the same large
+value cannot learn from a win at all.** The last of those is not a hunch —
+the output layer's sum starts at 33, the sigmoid is pinned at one, and the
+gradient towards a winning target is exactly zero.
+
+Getting to that answer took some fixing first. The measurement that looked
+like it was measuring skill was measuring the model on the positions it
+already knew, and the model could not learn at all until the shape of the
+network, the activation and the target were changed. All of it is written
+up in [FINDINGS.md](FINDINGS.md).
+
+The results, over five runs with a seed of their own:
+
+```
+  run  seed       zero   random  maximum   the models against each other
+  1    1         0.296    0.089    0.206   zero 43  random 367  maximum 150
+  2    2         0.279    0.070    0.201   zero 45  random 264  maximum 141
+  3    3         0.281    0.094    0.230   zero 57  random 345  maximum 127
+  4    4         0.277    0.089    0.219   zero 42  random 247  maximum 141
+  5    5         0.291    0.081    0.242   zero 53  random 256  maximum 141
+
+  over all 5 runs
+  zero     won the round robin 0 times out of 5;  it won 240 and lost 1479
+  random   won the round robin 5 times out of 5;  it won 1479 and lost 22
+  maximum  won the round robin 0 times out of 5;  it won 700 and lost 918
 ```
 
-To watch files for changes:
-
-```sh
-make watch
-```
-
-To clean up the compiled files, use:
-
-```sh
-make clean
-```
-
-## Project Structure
+## Project structure
 
 ```
 learn_000
@@ -93,8 +104,7 @@ learn_000
 │   ├── neuron.h
 │   ├── policy.h
 │   ├── rng.h
-│   ├── trainer.h
-│   └── ...
+│   └── trainer.h
 ├── src
 │   ├── arena.c
 │   ├── board.c
@@ -108,53 +118,21 @@ learn_000
 │   ├── neuron.c
 │   ├── policy.c
 │   ├── rng.c
-│   ├── trainer.c
-│   └── ...
+│   └── trainer.c
 ├── test
-│   ├── arena.test.c
-│   ├── board.test.c
-│   ├── evaluate.test.c
-│   ├── game.test.c
-│   ├── judge.test.c
-│   ├── layer.test.c
-│   ├── main.test.c
-│   ├── minimax.test.c
-│   ├── network.test.c
-│   ├── network_init.test.c
-│   ├── neuron.test.c
-│   ├── policy.test.c
-│   ├── rng.test.c
-│   ├── thread.test.c
-│   ├── trainer.test.c
-│   └── ...
-├── obj
-│   └── ...
-├── .editorconfig
-├── .gitignore
-├── .gitmodules
+│   ├── test-runner
+│   └── *.test.c
 ├── CHANGELOG.md
+├── FINDINGS.md
 ├── LICENSE.md
 ├── Makefile
-└── README.md
+├── README.md
+└── notes.md
 ```
 
-- **include/**: Contains the header files (.h files).
-- **src/**: Contains the source files (.c files). Each file is compiled and linked on its own, so new modules can be added without changing the Makefile.
-- **test/**: Contains the test files (.test.c files).
-- **obj/**: Contains the compiled object files, created by the build.
-- **.editorconfig**: A file to define editor coding styles (https://editorconfig.org/).
-- **.git**: Version control directory.
-- **.gitignore**: Specifies intentionally untracked files to ignore.
-- **.gitmodules**: Defines submodule properties.
-- **CHANGELOG.md**: Changelog (https://keepachangelog.com/en/1.1.0/).
-- **LICENSE**: License.
-- **Makefile**: A file to automate the build process.
-- **README.md**: This file.
+`notes.md` holds the thinking behind the project, including the questions
+this was built to answer.
 
-## Contributing
+## Licence
 
-Contributions are welcome! Please fork this repository and submit a pull request with your improvements.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+See [LICENSE.md](LICENSE.md).

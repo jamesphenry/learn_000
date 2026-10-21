@@ -215,6 +215,70 @@ bool evaluate_against_perfect(const network_t *network, unsigned long long seed,
 	return true;
 }
 
+bool evaluate_initialisation(const network_t *network, initialisation_t *result)
+{
+	network_t *mutable_network = (network_t *)network;
+	board_t board;
+	double inputs[CELL_COUNT];
+
+	if (network == NULL || result == NULL) return false;
+	if (network->n_layers < 1) return false;
+
+	memset(result, 0, sizeof(*result));
+
+	result->hidden_lowest = 1e9;
+	result->hidden_highest = -1e9;
+	result->output_lowest = 1e9;
+	result->output_highest = -1e9;
+
+	/* over every board with a mark on it and another mark off it */
+	for (int first = 0; first < CELL_COUNT; first++) {
+		for (int second = 0; second < CELL_COUNT; second++) {
+			double hidden[LAYER_MAX_NEURONS];
+			double output = 0.0;
+
+			if (first == second) continue;
+
+			board_init(&board);
+			place_mark(&board, (board_cell_t)first, 'X');
+			place_mark(&board, (board_cell_t)second, 'O');
+			board_to_inputs(&board, inputs);
+
+			for (int neuron = 0; neuron < network->layers[0].n_neurons; neuron++) {
+				double sum = neuron_weighted_sum(inputs,
+				                                network->layers[0].weights[neuron],
+				                                network->layers[0].n_inputs,
+				                                network->layers[0].biases[neuron]);
+
+				hidden[neuron] = neuron_activate(sum, network->layers[0].activation);
+
+				if (sum < result->hidden_lowest) result->hidden_lowest = sum;
+				if (sum > result->hidden_highest) result->hidden_highest = sum;
+			}
+
+			for (int i = 0; i < network->layers[0].n_neurons; i++)
+				output += hidden[i] * network->layers[1].weights[0][i];
+
+			output += network->layers[1].biases[0];
+
+			if (output < result->output_lowest) result->output_lowest = output;
+			if (output > result->output_highest) result->output_highest = output;
+		}
+	}
+
+	/* and what it says about an empty board */
+	board_init(&board);
+	board_to_inputs(&board, inputs);
+	network_forward(mutable_network, inputs, CELL_COUNT, &result->worth, 1);
+
+	/* the pull of the loss on it: the error of a sigmoid is its output
+	 * less the target */
+	result->gradient_to_one = fabs(result->worth - 1.0);
+	result->gradient_to_zero = fabs(result->worth - 0.0);
+
+	return true;
+}
+
 /* The result of a game, on the same scale as the worth of a position. */
 static double worth_of_result(game_result_t outcome)
 {

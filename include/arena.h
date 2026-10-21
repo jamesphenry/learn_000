@@ -40,6 +40,9 @@ typedef struct {
 
 /* What a model did. */
 typedef struct {
+	/* what it looked like before it learned anything */
+	initialisation_t initialisation;
+
 	double win_rate_before;
 	double win_rate_after;
 	double brier_before;

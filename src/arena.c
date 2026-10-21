@@ -123,6 +123,7 @@ static bool arena_train_one(const arena_settings_t *settings, init_scheme_t sche
 
 	/* what the model is like before it has learned anything */
 	arena_measure(settings, network, &before);
+	evaluate_initialisation(network, &result->initialisation);
 
 	/* and then it learns */
 	trainer_init(&trainer, network, settings->learning_rate);

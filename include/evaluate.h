@@ -49,6 +49,25 @@ typedef struct {
 } evaluation_t;
 
 /*
+ * What a network looks like before it has learned anything.
+ *
+ * The sums the hidden layer sees, the sum the output layer sees, and what
+ * the network therefore says. The last two numbers are the pull of the loss
+ * on the network: how hard it would be to learn that a position is a win,
+ * and how hard it would be to learn that it is a loss. A network whose
+ * output is pinned at one cannot learn from a win at all.
+ */
+typedef struct {
+	double hidden_lowest;
+	double hidden_highest;
+	double output_lowest;
+	double output_highest;
+	double worth;           /* what it says about an empty board */
+	double gradient_to_one;  /* how hard it would be to learn that X wins */
+	double gradient_to_zero; /* and how hard it would be to learn that O wins */
+} initialisation_t;
+
+/*
  * How a match between two networks went.
  */
 typedef struct {
@@ -125,6 +144,12 @@ bool evaluate_skill(const network_t *network, unsigned long long seed, int games
  */
 bool evaluate_against_perfect(const network_t *network, unsigned long long seed,
                               int games, perfect_result_t *result);
+
+/*
+ * Looks at a network before it has learned anything, and says what it looks
+ * like.
+ */
+bool evaluate_initialisation(const network_t *network, initialisation_t *result);
 
 /*
  * Plays games against an opponent that plays at random, with the network
