@@ -241,6 +241,39 @@ static char *test_relu_after_the_weighted_sum(void)
 	return NULL;
 }
 
+static char *test_sigmoid(void)
+{
+	_it_should("give a half at zero", nearly_equal(neuron_sigmoid(0.0), 0.5));
+	_it_should("give nearly one for a large positive value", neuron_sigmoid(10.0) > 0.99);
+	_it_should("give nearly zero for a large negative value", neuron_sigmoid(-10.0) < 0.01);
+	_it_should("stay a probability even for a huge value",
+		neuron_sigmoid(-1000.0) >= 0.0 && neuron_sigmoid(1000.0) <= 1.0);
+	_it_should("not be the same as a relu", neuron_sigmoid(-2.5) != neuron_relu(-2.5));
+
+	return NULL;
+}
+
+static char *test_activate(void)
+{
+	_it_should("use the relu when asked for it",
+		nearly_equal(neuron_activate(-2.5, ACTIVATION_RELU), 0.0));
+	_it_should("use the sigmoid when asked for it",
+		nearly_equal(neuron_activate(0.0, ACTIVATION_SIGMOID), 0.5));
+
+	return NULL;
+}
+
+static char *test_derivative(void)
+{
+	_it_should("be one for a positive relu", nearly_equal(neuron_derivative(1.0, ACTIVATION_RELU), 1.0));
+	_it_should("be zero for a negative relu", nearly_equal(neuron_derivative(-1.0, ACTIVATION_RELU), 0.0));
+	_it_should("be zero at zero for a relu", nearly_equal(neuron_derivative(0.0, ACTIVATION_RELU), 0.0));
+	_it_should("be a quarter in the middle of a sigmoid",
+		nearly_equal(neuron_derivative(0.0, ACTIVATION_SIGMOID), 0.25));
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	_run_test(test_all_zero);
@@ -254,6 +287,9 @@ static char *run_tests()
 	_run_test(test_fractional_values);
 	_run_test(test_rounding);
 	_run_test(test_relu);
+	_run_test(test_sigmoid);
+	_run_test(test_activate);
+	_run_test(test_derivative);
 	_run_test(test_relu_edges);
 	_run_test(test_relu_after_the_weighted_sum);
 	_run_test(test_board_feeds_a_neuron);

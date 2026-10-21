@@ -24,7 +24,8 @@ typedef struct {
 } network_t;
 
 bool network_init(network_t *network);
-bool network_add_layer(network_t *network, int n_inputs, int n_neurons);
+bool network_add_layer(network_t *network, int n_inputs, int n_neurons,
+                      activation_t activation);
 bool network_forward(const network_t *network, const double *inputs, size_t n_inputs,
                      double *outputs, size_t n_outputs);
 int network_input_size(const network_t *network);

@@ -89,6 +89,7 @@ learn_000
 │   ├── neuron.h
 │   ├── policy.h
 │   ├── rng.h
+│   ├── trainer.h
 │   └── ...
 ├── src
 │   ├── board.c
@@ -99,6 +100,7 @@ learn_000
 │   ├── neuron.c
 │   ├── policy.c
 │   ├── rng.c
+│   ├── trainer.c
 │   └── ...
 ├── test
 │   ├── board.test.c
@@ -110,6 +112,7 @@ learn_000
 │   ├── policy.test.c
 │   ├── rng.test.c
 │   ├── thread.test.c
+│   ├── trainer.test.c
 │   └── ...
 ├── obj
 │   └── ...

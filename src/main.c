@@ -4,6 +4,7 @@
 #include "board.h"
 #include "game.h"
 #include "network.h"
+#include "trainer.h"
 #include "policy.h"
 
 int greet(char *message)
@@ -33,13 +34,13 @@ static void score_a_game(void)
 	place_mark(&board, CELL_CENTER, 'O');
 
 	network_init(&network);
-	network_add_layer(&network, CELL_COUNT, 2);
+	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_RELU);
 	network.layers[0].weights[0][0] = 1.0;
 	network.layers[0].weights[0][1] = 1.0;
 	network.layers[0].weights[1][2] = -1.0;
 	network.layers[0].biases[1] = 0.5;
 
-	network_add_layer(&network, 2, CELL_COUNT);
+	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_RELU);
 	network.layers[1].weights[2][0] = 1.0;
 	network.layers[1].weights[2][1] = -1.0;
 
@@ -69,12 +70,12 @@ static void score_a_game(void)
 static void build_the_experiment_network(network_t *network)
 {
 	network_init(network);
-	network_add_layer(network, CELL_COUNT, 2);
+	network_add_layer(network, CELL_COUNT, 2, ACTIVATION_RELU);
 	network->layers[0].weights[0][0] = 1.0;
 	network->layers[0].weights[0][1] = 1.0;
 	network->layers[0].weights[1][2] = 1.0;
 
-	network_add_layer(network, 2, CELL_COUNT);
+	network_add_layer(network, 2, CELL_COUNT, ACTIVATION_RELU);
 	for (int cell = 0; cell < CELL_COUNT; cell++) {
 		network->layers[1].weights[cell][0] = (double)(cell + 1);
 		network->layers[1].weights[cell][1] = 1.0;
@@ -159,13 +160,13 @@ static void play_a_game(void)
 	game_result_t result;
 
 	network_init(&network);
-	network_add_layer(&network, CELL_COUNT, 2);
+	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_RELU);
 	network.layers[0].weights[0][0] = 1.0;
 	network.layers[0].weights[0][1] = 1.0;
 	network.layers[0].weights[1][2] = -1.0;
 	network.layers[0].biases[1] = 0.5;
 
-	network_add_layer(&network, 2, CELL_COUNT);
+	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_RELU);
 	network.layers[1].weights[2][0] = 1.0;
 	network.layers[1].weights[2][1] = -1.0;
 
@@ -179,6 +180,59 @@ static void play_a_game(void)
 	       result == GAME_O_WINS ? "went to O" : "was drawn");
 }
 
+/*
+ * A network that watches the top row, and a game where X takes it and wins.
+ * The trainer plays the game over and over, and the chance that X wins by
+ * taking the top right cell goes up.
+ */
+static void train_a_network(void)
+{
+	network_t network;
+	trainer_t trainer;
+	game_t game;
+	board_t board;
+	double inputs[CELL_COUNT];
+	double before[CELL_COUNT];
+	double after[CELL_COUNT];
+
+	network_init(&network);
+	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_RELU);
+	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_SIGMOID);
+
+	/* the hidden layer watches the two cells on the left of the top row */
+	network.layers[0].weights[0][0] = 1.0;
+	network.layers[0].weights[1][1] = 1.0;
+
+	/* and the output for the top right cell reads both of them */
+	network.layers[1].weights[CELL_TOP_RIGHT][0] = 1.0;
+	network.layers[1].weights[CELL_TOP_RIGHT][1] = 1.0;
+
+	trainer_init(&trainer, &network, 0.1);
+
+	/* the board as it is before the top right is taken */
+	board_init(&board);
+	place_mark(&board, CELL_TOP_LEFT, 'X');
+	place_mark(&board, CELL_TOP, 'X');
+	board_to_inputs(&board, inputs);
+	network_forward(&network, inputs, CELL_COUNT, before, CELL_COUNT);
+
+	/* a game where X takes the top row and wins */
+	game_init(&game);
+	game_play_move(&game, CELL_TOP_LEFT);
+	game_play_move(&game, CELL_CENTER);
+	game_play_move(&game, CELL_TOP);
+	game_play_move(&game, CELL_MIDDLE_LEFT);
+	game_play_move(&game, CELL_TOP_RIGHT);
+
+	for (int i = 0; i < 20; i++)
+		trainer_train_game(&trainer, &game);
+
+	network_forward(&network, inputs, CELL_COUNT, after, CELL_COUNT);
+
+	printf("\nthe top right cell was scored %g, and after training %g\n",
+	       before[CELL_TOP_RIGHT], after[CELL_TOP_RIGHT]);
+}
+
 int main(int argc, char *argv[], char *env[]) {
 	UNUSED(argc);
 	UNUSED(argv);
@@ -190,6 +244,9 @@ int main(int argc, char *argv[], char *env[]) {
 
 	printf("\n");
 	play_a_game();
+
+	printf("\n");
+	train_a_network();
 
 	return EXIT_SUCCESS;
 }

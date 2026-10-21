@@ -18,7 +18,8 @@ bool network_init(network_t *network)
 	return true;
 }
 
-bool network_add_layer(network_t *network, int n_inputs, int n_neurons)
+bool network_add_layer(network_t *network, int n_inputs, int n_neurons,
+                      activation_t activation)
 {
 	if (network == NULL) return false;
 	if (network->n_layers >= NETWORK_MAX_LAYERS) return false;
@@ -31,7 +32,8 @@ bool network_add_layer(network_t *network, int n_inputs, int n_neurons)
 		if (n_inputs != network->layers[network->n_layers - 1].n_neurons) return false;
 	}
 
-	if (!layer_init(&network->layers[network->n_layers], n_inputs, n_neurons)) return false;
+	if (!layer_init(&network->layers[network->n_layers], n_inputs, n_neurons, activation))
+		return false;
 
 	network->n_layers++;
 	network->output_size = n_neurons;
