@@ -11,7 +11,7 @@ void arena_settings_init(arena_settings_t *settings)
 	if (settings == NULL) return;
 
 	settings->hidden_neurons = 16;
-	settings->training_games = 500;
+	settings->training_games = 20000;
 	settings->evaluation_games = 200;
 	settings->match_games = 200;
 	settings->training_seed = 1;
