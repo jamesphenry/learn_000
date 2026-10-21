@@ -171,6 +171,53 @@ static char *test_a_model_that_learns_gets_better(void)
 	return NULL;
 }
 
+static char *test_a_run_says_what_the_model_gave_away(void)
+{
+	arena_settings_t settings;
+	arena_result_t result;
+
+	build_small_settings(&settings);
+
+	arena_run(&settings, INIT_RANDOM, &result);
+
+	/* the worth a position can be given away is between nought and two:
+	 * a win given away is one and a loss given away is one */
+	_it_should("say how much worth the model gave away",
+		result.value_lost_after >= 0.0 && result.value_lost_after <= 2.0);
+	_it_should("count the games against the perfect player",
+		result.perfect_after.games == settings.evaluation_games);
+	_it_should("count every one of them once",
+		result.perfect_after.wins + result.perfect_after.draws +
+		result.perfect_after.losses == settings.evaluation_games);
+	_it_should("take each colour the same number of times",
+		result.perfect_after.as_x == result.perfect_after.as_o);
+
+	return NULL;
+}
+
+static char *test_the_perfect_player_teaches_better_than_its_own_games(void)
+{
+	arena_settings_t settings;
+	arena_result_t truth;
+	arena_result_t self;
+
+	build_small_settings(&settings);
+	settings.training_games = 500;
+
+	settings.learning = ARENA_LEARN_TRUTH;
+	arena_run(&settings, INIT_RANDOM, &truth);
+
+	settings.learning = ARENA_LEARN_SELF;
+	arena_run(&settings, INIT_RANDOM, &self);
+
+	/* the perfect player says what each position is worth, so a model
+	 * taught by it should end up closer to the truth than one that has to
+	 * make do with the result of its own games */
+	_it_should("get closer to the truth", truth.truth_after < self.truth_after);
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	_run_test(test_the_settings_start_with_sensible_values);
@@ -180,6 +227,8 @@ static char *run_tests()
 	_run_test(test_the_same_run_gives_the_same_result);
 	_run_test(test_the_way_a_model_starts_off_matters);
 	_run_test(test_a_model_that_learns_gets_better);
+	_run_test(test_a_run_says_what_the_model_gave_away);
+	_run_test(test_the_perfect_player_teaches_better_than_its_own_games);
 
 	return NULL;
 }
