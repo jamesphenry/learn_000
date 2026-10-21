@@ -21,8 +21,14 @@ CC=${CC:-cc}
 INCLUDE="$(dirname "$SCRIPT")/include"
 CFLAGS=${CFLAGS:-"-Wall -Wextra -Wno-unused-parameter"}
 CFLAGS="${CFLAGS} -g -fdiagnostics-color=always -DDEBUG -DTESTS -I$INCLUDE"
-if [ -x "$(which valgrind)" ]; then
-	VALGRIND="valgrind --quiet --show-error-list=yes --leak-check=full --show-leak-kinds=all"
+
+# The tests are run under valgrind when it is installed, and valgrind is the
+# one that says what is wrong with the memory. The error exit code is what
+# turns a memory error into a failed test, so it is asked for.
+if [ -z "$VALGRIND" ]; then
+	if [ -x "$(which valgrind)" ]; then
+		VALGRIND="valgrind --quiet --show-error-list=yes --leak-check=full --show-leak-kinds=all --error-exitcode=1"
+	fi
 fi
 RUNNER=${RUNNER:-${VALGRIND}}
 
@@ -42,10 +48,22 @@ eval $STAT "$0" 1>/dev/null 2>/dev/null || STAT="stat -f '%m %N'"
 # Sort by Modified date
 TESTS=$(eval $STAT $TESTS | sort -t ' ' -nk1 | cut -d ' ' -f2-)
 
+failed=0
+
 for test in $TESTS
 do
 	echo "${test}"
 	out="$(basename ${test}.out)"
-	$CC $CFLAGS $SOURCES "${test}" -o "${out}" && $RUNNER "./${out}"
+	if $CC $CFLAGS $SOURCES "${test}" -o "${out}"; then
+		if ! $RUNNER "./${out}"; then
+			echo "FAILED: ${test}"
+			failed=1
+		fi
+	else
+		echo "FAILED TO BUILD: ${test}"
+		failed=1
+	fi
 	[ -x ] && rm "${out}"
 done
+
+exit $failed

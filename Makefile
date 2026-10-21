@@ -84,6 +84,12 @@ run-debug: $(DEBUG_TARGET) ## Build and run debug target
 	$(DEBUG_TARGET)
 
 
+# The tests are run under valgrind when it is installed. A memory error is a
+# failed test: valgrind is asked to fail the run when it finds one, and the
+# output is checked as well, so that nothing slips through.
+VALGRIND_FLAGS = --quiet --show-error-list=yes --leak-check=full --show-leak-kinds=all --error-exitcode=1
+TEST_ERRORS = \*\*FAIL\*\*|Segmentation fault|SIGSEGV|core dumped|Invalid read|Invalid write|Invalid free|Mismatched free|uninitialised|definitely lost|indirectly lost|possibly lost|ERROR SUMMARY: [1-9]
+
 # Run tests
 #
 # The test files are compiled on their own, without $(OBJ), and pull the
@@ -92,22 +98,31 @@ run-debug: $(DEBUG_TARGET) ## Build and run debug target
 # test override puts() to capture the greeting. A new source file therefore
 # has to be added to the test file as well.
 #
-# The runner exits successfully even when a test fails or crashes, so its
-# output is checked as well before the build is called a success.
+# The runner says which test failed, and the output is checked as well
+# before the build is called a success.
 test: ## Run tests
 	@if out="$$(CFLAGS="$(CFLAGS) -g -Og -I. -DTEST -pthread" sh test/test-runner/test-runner.sh $(TST) 2>&1)"; then rc=0; else rc=$$?; fi; \
 	echo "$$out"; \
-	if [ $$rc -ne 0 ] || echo "$$out" | grep -qE '\*\*FAIL\*\*|Segmentation fault|SIGSEGV|core dumped'; then \
+	if [ $$rc -ne 0 ] || echo "$$out" | grep -qE '$(TEST_ERRORS)'; then \
 		echo "tests failed"; \
 		exit 1; \
 	fi
 .PHONY: test
 
+# Run tests under valgrind
+#
+# The tests are run under valgrind when it is installed, but this target says
+# that valgrind is wanted, and says so when it is not there.
+test-valgrind: ## Run tests under valgrind
+	@command -v valgrind >/dev/null 2>&1 || { echo "valgrind is not installed"; exit 1; }; \
+	$(MAKE) test VALGRIND="valgrind $(VALGRIND_FLAGS)"
+.PHONY: test-valgrind
+
 # Run tests with AddressSanitizer and UndefinedBehaviorSanitizer
 test-asan: ## Run tests with AddressSanitizer and UndefinedBehaviorSanitizer
 	@out="$$(RUNNER=command CFLAGS="$(CFLAGS) -g -Og -I. -DTEST -pthread -fsanitize=address,undefined" sh test/test-runner/test-runner.sh $(TST) 2>&1)"; rc=$$?; \
 	echo "$$out"; \
-	if [ $$rc -ne 0 ] || echo "$$out" | grep -qE '\*\*FAIL\*\*|Segmentation fault|SIGSEGV|core dumped|ERROR: AddressSanitizer'; then \
+	if [ $$rc -ne 0 ] || echo "$$out" | grep -qE '$(TEST_ERRORS)'; then \
 		echo "tests failed"; \
 		exit 1; \
 	fi
@@ -117,7 +132,7 @@ test-asan: ## Run tests with AddressSanitizer and UndefinedBehaviorSanitizer
 test-quick: ## Run fast tests (no Valgrind)
 	@out="$$(RUNNER=command CFLAGS="$(CFLAGS) -g -Og -I. -DTEST -pthread" sh test/test-runner/test-runner.sh $(TST) 2>&1)"; rc=$$?; \
 	echo "$$out"; \
-	if [ $$rc -ne 0 ] || echo "$$out" | grep -qE '\*\*FAIL\*\*|Segmentation fault|SIGSEGV|core dumped'; then \
+	if [ $$rc -ne 0 ] || echo "$$out" | grep -qE '$(TEST_ERRORS)'; then \
 		echo "tests failed"; \
 		exit 1; \
 	fi
