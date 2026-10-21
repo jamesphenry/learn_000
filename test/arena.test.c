@@ -613,6 +613,21 @@ static char *test_a_league_plays_every_pair(void)
 			league.model[i].same_wins + league.model[i].same_draws > 0);
 		_it_should("have played the models of the other kind",
 			league.model[i].other_wins + league.model[i].other_draws > 0);
+
+		/* and the same held back opponents as every other model, which is
+		 * what makes the third ranking a fair comparison */
+		_it_should("have played the held back models of its own kind",
+			league.model[i].held_same_games > 0);
+		_it_should("have played the held back models of the other kind",
+			league.model[i].held_other_games > 0);
+		_it_should("have played as many held back games as every other model",
+			league.model[i].held_same_games + league.model[i].held_other_games ==
+			league.model[0].held_same_games + league.model[0].held_other_games);
+		_it_should("cannot have played more held back games than there are",
+			league.model[i].held_same_games + league.model[i].held_other_games <=
+			ARENA_HELD_OUT * settings.match_games);
+
+
 		_it_should("count its points against its own kind from those games",
 			league.model[i].same_points == 3 * league.model[i].same_wins +
 			league.model[i].same_draws);
@@ -664,15 +679,65 @@ static char *test_the_three_rankings_of_a_league_are_in_order(void)
 			league.model[league.ranking_league[i - 1]].points >=
 			league.model[league.ranking_league[i]].points);
 		_it_should("put the models in the order of how they did against the"
-			   " models of the other kind",
-			league.model[league.ranking_general[i - 1]].other_points >=
-			league.model[league.ranking_general[i]].other_points);
+			   " held back models of the other kind",
+			league.model[league.ranking_general[i - 1]].held_other_points >=
+			league.model[league.ranking_general[i]].held_other_points);
 	}
 
 	/* and the three rankings say three different things: how well a model
 	 * learned is not how well it plays */
 	_it_should("rank the models differently by training and by the league",
 		league.ranking_training[0] != league.ranking_league[0]);
+
+	return NULL;
+}
+
+/*
+ * A model that has learned the game beats one that has not, so the models
+ * taught by the perfect player earn more against the other kind than against
+ * their own, and the others earn less. The models here have to have learned
+ * something for that to be true.
+ */
+static char *test_the_held_back_opponents_are_of_both_kinds(void)
+{
+	arena_settings_t settings;
+	arena_league_t league;
+
+	build_small_settings(&settings);
+	settings.training_games = 2000;
+	settings.hidden_neurons = 8;
+
+	arena_league(&settings, 6, &league);
+
+	for (int i = 0; i < league.models; i++) {
+		if (league.model[i].teacher == LEAGUE_TRUTH)
+			_it_should("earn more against the other kind than against its own",
+				league.model[i].held_other_points > league.model[i].held_same_points);
+		else
+			_it_should("earn less against the other kind than against its own",
+				league.model[i].held_other_points < league.model[i].held_same_points);
+	}
+
+	return NULL;
+}
+
+static char *test_the_held_back_models_are_not_in_the_league(void)
+{
+	arena_settings_t settings;
+	arena_league_t league;
+
+	build_small_settings(&settings);
+
+	arena_league(&settings, 8, &league);
+
+	for (int held = 0; held < ARENA_HELD_OUT; held++) {
+		int in_the_league = 0;
+
+		for (int i = 0; i < league.models; i++)
+			if (league.model[i].seed == league.held_seed[held]) in_the_league = 1;
+
+		_it_should("hold a model back that is not in the league", !in_the_league);
+	}
 
 	return NULL;
 }
@@ -742,6 +807,8 @@ static char *run_tests()
 	_run_test(test_a_league_plays_every_pair);
 	_run_test(test_every_model_in_a_league_has_a_seed_of_its_own);
 	_run_test(test_the_three_rankings_of_a_league_are_in_order);
+	_run_test(test_the_held_back_opponents_are_of_both_kinds);
+	_run_test(test_the_held_back_models_are_not_in_the_league);
 	_run_test(test_the_same_league_comes_again);
 	_run_test(test_a_league_refuses_bad_arguments);
 

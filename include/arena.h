@@ -180,6 +180,11 @@ bool arena_duel(const arena_settings_t *settings, unsigned long long first_seed,
 /* How many models a league holds. */
 #define ARENA_MAX_MODELS 128
 
+/* How many opponents are held back from the league for every model to be
+ * measured against: one of each kind, trained to play in two different
+ * ways. */
+#define ARENA_HELD_OUT 4
+
 /* How a model in a league is taught. */
 typedef enum {
 	LEAGUE_SELF,  /* from the result of the games it plays against itself */
@@ -210,9 +215,17 @@ typedef struct {
 	int losses;
 	int points;         /* three for a win, one for a draw */
 
-	/* and the same, split by the kind of opponent */
+	/* and the same, split by the kind of opponent in the league */
 	int same_wins, same_draws, same_points;
 	int other_wins, other_draws, other_points;
+
+	/* and its record against the opponents held back from the league,
+	 * which are the same for every model: one of its own kind and one of
+	 * the other kind, each trained to play in two different ways */
+	int held_same_points;   /* against the held back models of its own kind */
+	int held_other_points;  /* and against the held back models of the other kind */
+	int held_same_games;    /* how many games that was */
+	int held_other_games;
 } league_model_t;
 
 /* A whole league. */
@@ -223,12 +236,16 @@ typedef struct {
 	/* the model with the most points */
 	int champion;
 
+	/* and the seeds of the opponents that were held back from the league,
+	 * which are not the seeds of any model in it */
+	unsigned long long held_seed[ARENA_HELD_OUT];
+
 	/* and the models in three different orders, because they say three
 	 * different things:
 	 *
 	 *   training   how well it learned from its own games
 	 *   league     how well it did against every other model
-	 *   general    how well it did against models of another kind
+	 *   general    how well it did against held back models of another kind
 	 */
 	int ranking_training[ARENA_MAX_MODELS];
 	int ranking_league[ARENA_MAX_MODELS];
@@ -245,6 +262,13 @@ typedef struct {
  *
  * A league rather than a knockout, because a knockout of models that draw
  * most of their games against each other is decided by luck.
+ *
+ * Four models are held back from the league and never play in it, and every
+ * model is measured against them. They are the same for every model, which
+ * is what makes the third ranking a fair comparison: the points a model
+ * earns against the other kind in the league depend on which models happened
+ * to be in the league and how strong they were, while the points it earns
+ * against a held back opponent depend only on the model and the opponent.
  */
 bool arena_league(const arena_settings_t *settings, int models,
                   arena_league_t *league);

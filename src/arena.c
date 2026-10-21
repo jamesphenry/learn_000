@@ -416,18 +416,22 @@ static double measure_league(const league_model_t *model)
 	return model->points;
 }
 
-/* How well it did against the models of the other kind. */
+/* How well it did against the models held back from the league, which are
+ * the same for every model. */
 static double measure_general(const league_model_t *model)
 {
-	return model->other_points;
+	return model->held_other_points;
 }
 
 /*
  * Builds one model and teaches it, and says how well it learned.
+ *
+ * The temperature is how much the policy explores while it is learning, and
+ * it is what makes two models of the same kind play differently.
  */
 static bool league_build_one(const arena_settings_t *settings, unsigned long long seed,
-                             league_teacher_t teacher, network_t *network,
-                             policy_t *policy, trainer_t *trainer,
+                             league_teacher_t teacher, double temperature,
+                             network_t *network, policy_t *policy, trainer_t *trainer,
                              league_model_t *record)
 {
 	arena_look_t look;
@@ -438,7 +442,7 @@ static bool league_build_one(const arena_settings_t *settings, unsigned long lon
 	if (!arena_build(network, settings, INIT_RANDOM, &rng)) return false;
 
 	trainer_init(trainer, network, settings->learning_rate);
-	policy_init(policy, network, seed, settings->temperature);
+	policy_init(policy, network, seed, temperature);
 
 	if (teacher == LEAGUE_TRUTH)
 		arena_learn_from_the_truth(trainer, policy, settings->training_games);
@@ -466,6 +470,8 @@ bool arena_league(const arena_settings_t *settings, int models,
 	network_t *network = NULL;
 	policy_t *policy = NULL;
 	trainer_t *trainer = NULL;
+	network_t held_network[ARENA_HELD_OUT];
+	policy_t held_policy[ARENA_HELD_OUT];
 	rng_t rng;
 
 	if (settings == NULL || league == NULL) return false;
@@ -496,12 +502,57 @@ bool arena_league(const arena_settings_t *settings, int models,
 		league_teacher_t teacher = (i % 2 == 0) ? LEAGUE_TRUTH : LEAGUE_SELF;
 		unsigned long long seed = settings->training_seed + (unsigned long long)i;
 
-		if (!league_build_one(settings, seed, teacher, &network[i], &policy[i],
-		                      &trainer[i], &league->model[i])) {
+		if (!league_build_one(settings, seed, teacher, settings->temperature,
+		                      &network[i], &policy[i], &trainer[i], &league->model[i])) {
 			free(network);
 			free(policy);
 			free(trainer);
 			return false;
+		}
+	}
+
+	/* four models are held back from the league and never play in it: one
+	 * of each kind, each trained to play in two different ways, so that
+	 * every model meets the same opponents of the same kinds */
+	for (int held = 0; held < ARENA_HELD_OUT; held++) {
+		league_teacher_t teacher = (held % 2 == 0) ? LEAGUE_TRUTH : LEAGUE_SELF;
+		double temperature = (held / 2 == 0) ?
+			settings->temperature : settings->temperature * 4.0;
+		league_model_t record;
+		trainer_t held_trainer;
+
+		league->held_seed[held] = settings->training_seed +
+		                          (unsigned long long)models +
+		                          (unsigned long long)held;
+
+		if (!league_build_one(settings, league->held_seed[held],
+		                       teacher, temperature, &held_network[held],
+		                       &held_policy[held], &held_trainer, &record)) {
+			free(network);
+			free(policy);
+			free(trainer);
+			return false;
+		}
+	}
+
+	/* and every model is measured against them */
+	for (int i = 0; i < models; i++) {
+		for (int held = 0; held < ARENA_HELD_OUT; held++) {
+			match_result_t match;
+			int same_kind = (league->model[i].teacher ==
+			                 (held % 2 == 0) ? LEAGUE_TRUTH : LEAGUE_SELF);
+
+			evaluate_against(&network[i], &held_network[held],
+			                 settings->evaluation_seed, settings->match_games,
+			                 0.0, &match);
+
+			if (same_kind) {
+				league->model[i].held_same_points += 3 * match.first_wins + match.draws;
+				league->model[i].held_same_games += settings->match_games;
+			} else {
+				league->model[i].held_other_points += 3 * match.first_wins + match.draws;
+				league->model[i].held_other_games += settings->match_games;
+			}
 		}
 	}
 
@@ -552,9 +603,6 @@ bool arena_league(const arena_settings_t *settings, int models,
 			}
 		}
 	}
-
-	/* and the champion is the one with the most points */
-	league->champion = league->ranking_league[0];
 
 	league_rank(league, league->ranking_training, measure_training);
 	league_rank(league, league->ranking_league, measure_league);

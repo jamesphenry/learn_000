@@ -222,3 +222,54 @@ You don't have to decide what every future game's features will look like now. I
 
 The real goal isn't to build a framework that anticipates every possible game. It's to build one where adding a new game doesn't require rewriting the neural-network machinery.
 
+---
+
+Benchmark the CPU. Record the training time for 1, 10, and 100 models.
+
+
+
+Benchmark tournament evaluation. Measure the time for all 4,950 unique pairings, including reversed player positions.
+
+
+
+Profile the bottleneck. Determine whether the time goes into game simulation, neural-network calculations, training updates, or overhead.
+
+
+
+Build a CUDA prototype around the most parallelizable, measurable workload.
+
+
+
+Compare identical experiments. Same initial weights, seeds, training examples, and evaluation conditions.
+
+---
+
+The CUDA roadmap I'd use
+Experiment	What it teaches you
+CPU training baseline	Correctness and timing
+CUDA forward pass	GPU memory layout and kernel design
+Batched tournament	Parallel inference across many matches
+Batched training	Parallel updates for many independent models
+Population scaling	100 → 1,000 → 10,000 models
+
+---
+
+Tesla P4 8 GB datacenter GPU is about to get a very silly job: training an army of tiny C neural networks to play tic-tac-toe.
+
+---
+
+One architectural choice I'd make: keep your existing C framework as the authority for model behavior. Add a CUDA backend as an experimental implementation, then compare its outputs and results against the CPU reference. You don't need to convert the entire project to CUDA C++ just to experiment with GPU kernels.
+
+And the Tesla P4's 8 GB of memory is ample for storing the weights of 100 tiny models; computation and launch overhead are much more likely to matter than capacity. 
+
+NVIDIA Images
++1
+
+
+
+
+The really fun milestone isn't merely making it faster. It's being able to say:
+
+I trained 100 neural networks against an optimal opponent, ran a reproducible tournament, and measured how their strategies differed — all from my own C framework.
+
+Then you turn the population up to 1,000 and see what breaks. 😈
