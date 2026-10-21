@@ -83,7 +83,8 @@ static int arena_learn_from_the_truth(trainer_t *trainer, policy_t *policy, int 
 /* What a model looks like at one moment. */
 typedef struct {
 	evaluation_t evaluation;
-	skill_t skill;
+	skill_t skill;      /* against an opponent that plays at random */
+	skill_t own_skill;  /* against itself */
 	perfect_result_t perfect;
 } arena_look_t;
 
@@ -97,7 +98,9 @@ static void arena_measure(const arena_settings_t *settings, const network_t *net
 	evaluate_network(network, settings->evaluation_seed, settings->evaluation_games,
 	                 &look->evaluation);
 	evaluate_skill(network, settings->evaluation_seed, settings->evaluation_games,
-	               &look->skill);
+	               POLICY_RANDOM_TEMPERATURE, &look->skill);
+	evaluate_skill(network, settings->evaluation_seed, settings->evaluation_games,
+	               0.0, &look->own_skill);
 	evaluate_against_perfect(network, settings->evaluation_seed,
 	                         settings->evaluation_games, &look->perfect);
 }
@@ -143,6 +146,10 @@ static bool arena_train_one(const arena_settings_t *settings, init_scheme_t sche
 		before.skill.value_lost / before.skill.moves : 0.0;
 	result->value_lost_after = after.skill.moves > 0 ?
 		after.skill.value_lost / after.skill.moves : 0.0;
+	result->value_lost_own_before = before.own_skill.moves > 0 ?
+		before.own_skill.value_lost / before.own_skill.moves : 0.0;
+	result->value_lost_own_after = after.own_skill.moves > 0 ?
+		after.own_skill.value_lost / after.own_skill.moves : 0.0;
 	result->perfect_before = before.perfect;
 	result->perfect_after = after.perfect;
 	result->trained_games = trained;

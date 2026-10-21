@@ -1,6 +1,7 @@
 #ifndef POLICY_H
 #define POLICY_H
 
+#include <math.h>
 #include <stdbool.h>
 #include "board.h"
 #include "network.h"
@@ -25,6 +26,10 @@ typedef struct {
 	rng_t rng;
 	double temperature;
 } policy_t;
+
+/* At this temperature every legal cell ends up with the same weight, so the
+ * policy plays at random. */
+#define POLICY_RANDOM_TEMPERATURE INFINITY
 
 bool policy_init(policy_t *policy, network_t *network, unsigned long long seed,
                  double temperature);

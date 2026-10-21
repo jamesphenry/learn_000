@@ -273,9 +273,9 @@ static char *test_the_skill_measurement_refuses_bad_arguments(void)
 
 	build_the_ordered_network(&network);
 
-	_it_should("refuse a null network", !evaluate_skill(NULL, 1, 10, &skill));
-	_it_should("refuse a null result", !evaluate_skill(&network, 1, 10, NULL));
-	_it_should("refuse no games", !evaluate_skill(&network, 1, 0, &skill));
+	_it_should("refuse a null network", !evaluate_skill(NULL, 1, 10, 0.0, &skill));
+	_it_should("refuse a null result", !evaluate_skill(&network, 1, 10, 0.0, NULL));
+	_it_should("refuse no games", !evaluate_skill(&network, 1, 0, 0.0, &skill));
 
 	return NULL;
 }
@@ -287,7 +287,7 @@ static char *test_the_skill_measurement_counts_the_moves(void)
 
 	build_the_ordered_network(&network);
 
-	evaluate_skill(&network, 1, 10, &skill);
+	evaluate_skill(&network, 1, 10, 0.0, &skill);
 
 	/* the game is over after seven moves, and it is the same game every
 	 * time, so ten games are seventy moves */
@@ -306,7 +306,7 @@ static char *test_the_skill_measurement_says_what_was_given_away(void)
 
 	build_the_ordered_network(&network);
 
-	evaluate_skill(&network, 1, 10, &skill);
+	evaluate_skill(&network, 1, 10, 0.0, &skill);
 
 	/* the seven moves of the game, and what each one gave away:
 	 *
@@ -330,6 +330,43 @@ static char *test_the_skill_measurement_says_what_was_given_away(void)
 	_it_should("throw one win away in each game", skill.threw_wins == 10);
 	_it_should("give three points of value away in each game",
 		nearly_equal(skill.value_lost, 30.0));
+
+	return NULL;
+}
+
+/*
+ * The same measurement against an opponent that plays at random, which
+ * reaches the positions the network would not have reached on its own.
+ */
+static char *test_the_skill_measurement_against_a_random_player(void)
+{
+	network_t network;
+	skill_t skill;
+	skill_t own;
+
+	build_the_ordered_network(&network);
+
+	evaluate_skill(&network, 1, 10, 0.0, &own);
+	evaluate_skill(&network, 1, 10, INFINITY, &skill);
+
+	_it_should("play some games", skill.moves > 0);
+	_it_should("count every move once",
+		skill.kept + skill.gave_away == skill.moves);
+	_it_should("give away no more than a move can be worth",
+		skill.value_lost >= 0.0);
+	_it_should("reach different positions than it does on its own",
+		skill.moves != own.moves || skill.value_lost != own.value_lost);
+
+	/* the network takes one colour and then the other, so it is measured
+	 * playing both sides. These are the numbers that comes to: with the
+	 * colours the other way round the measurement is a different one, and
+	 * it says 65 moves, 34 kept and 43 worth given away */
+	_it_should("count the moves it played", skill.moves == 62);
+	_it_should("count the moves that kept the value", skill.kept == 33);
+	_it_should("count the moves that gave value away", skill.gave_away == 29);
+	_it_should("count the wins it threw away", skill.threw_wins == 15);
+	_it_should("count the value it gave away",
+		nearly_equal(skill.value_lost, 40.0));
 
 	return NULL;
 }
@@ -371,6 +408,7 @@ static char *run_tests()
 	_run_test(test_the_skill_measurement_refuses_bad_arguments);
 	_run_test(test_the_skill_measurement_counts_the_moves);
 	_run_test(test_the_skill_measurement_says_what_was_given_away);
+	_run_test(test_the_skill_measurement_against_a_random_player);
 	_run_test(test_the_games_against_the_perfect_player);
 
 	return NULL;

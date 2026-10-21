@@ -6,10 +6,6 @@
 #include "minimax.h"
 #include "policy.h"
 
-/* At this temperature every legal cell ends up with the same weight, so
- * the policy plays at random. */
-#define RANDOM_TEMPERATURE INFINITY
-
 bool evaluate_against(const network_t *first, const network_t *second,
                       unsigned long long seed, int games, double temperature,
                       match_result_t *result)
@@ -68,9 +64,10 @@ bool evaluate_against(const network_t *first, const network_t *second,
 }
 
 bool evaluate_skill(const network_t *network, unsigned long long seed, int games,
-                    skill_t *result)
+                    double opponent_temperature, skill_t *result)
 {
 	policy_t policy;
+	policy_t opponent;
 	game_t game;
 	board_t positions[CELL_COUNT];
 	minimax_t oracle;
@@ -86,10 +83,16 @@ bool evaluate_skill(const network_t *network, unsigned long long seed, int games
 	memset(result, 0, sizeof(*result));
 
 	policy_init(&policy, (network_t *)network, seed, 0.0);
+	policy_init(&opponent, (network_t *)network, seed + 1, opponent_temperature);
 	minimax_init(&oracle);
 
 	for (int i = 0; i < games; i++) {
-		game_play(&game, &policy, &policy);
+		/* the network takes one colour and then the other */
+		if (i % 2 == 0)
+			game_play(&game, &policy, &opponent);
+		else
+			game_play(&game, &opponent, &policy);
+
 		game_positions(&game, positions);
 
 		for (int step = 0; step < game.moves; step++) {
@@ -239,7 +242,7 @@ bool evaluate_network(const network_t *network, unsigned long long seed, int gam
 	memset(result, 0, sizeof(*result));
 
 	policy_init(&network_policy, (network_t *)network, seed, 0.0);
-	policy_init(&random_policy, (network_t *)network, seed + 1, RANDOM_TEMPERATURE);
+	policy_init(&random_policy, (network_t *)network, seed + 1, POLICY_RANDOM_TEMPERATURE);
 	minimax_init(&oracle);
 
 	for (int i = 0; i < games; i++) {

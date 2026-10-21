@@ -107,13 +107,18 @@ bool evaluate_against(const network_t *first, const network_t *second,
                       match_result_t *result);
 
 /*
- * Plays games against itself and says how much value it gave away: for
- * every move it played, how much the position was worth less than the
- * best move there was. This is exact, so unlike a win rate it does not
- * wander from seed to seed.
+ * Plays games and says how much value the network gave away: for every
+ * move it played, how much the position was worth less than the best move
+ * there was. This is exact, so unlike a win rate it does not wander from
+ * seed to seed.
+ *
+ * The opponent plays at the given temperature. At zero it is the network
+ * playing its own game, which measures the network on the positions it
+ * knows best. At an infinite temperature it plays at random, which reaches
+ * the positions the network would not have reached on its own.
  */
 bool evaluate_skill(const network_t *network, unsigned long long seed, int games,
-                    skill_t *result);
+                    double opponent_temperature, skill_t *result);
 
 /*
  * Plays against the perfect player and says how it did.

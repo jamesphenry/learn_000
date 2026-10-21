@@ -46,9 +46,14 @@ typedef struct {
 	double brier_after;
 	double truth_before;
 	double truth_after;
-	/* the worth the model gave away, on each move it played */
+	/* the worth the model gave away, on each move it played, against an
+	 * opponent that plays at random */
 	double value_lost_before;
 	double value_lost_after;
+	/* and the same in the games it plays against itself, which are the
+	 * positions it knows best */
+	double value_lost_own_before;
+	double value_lost_own_after;
 	/* and how it did against the perfect player */
 	perfect_result_t perfect_before;
 	perfect_result_t perfect_after;
