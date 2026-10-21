@@ -86,6 +86,8 @@ learn_000
 │   ├── main.h
 │   ├── network.h
 │   ├── neuron.h
+│   ├── policy.h
+│   ├── rng.h
 │   └── ...
 ├── src
 │   ├── board.c
@@ -93,6 +95,8 @@ learn_000
 │   ├── main.c
 │   ├── network.c
 │   ├── neuron.c
+│   ├── policy.c
+│   ├── rng.c
 │   └── ...
 ├── test
 │   ├── board.test.c
@@ -100,6 +104,8 @@ learn_000
 │   ├── main.test.c
 │   ├── network.test.c
 │   ├── neuron.test.c
+│   ├── policy.test.c
+│   ├── rng.test.c
 │   ├── thread.test.c
 │   └── ...
 ├── obj
