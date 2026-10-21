@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 #include "arena.h"
 #include "evaluate.h"
@@ -372,6 +373,189 @@ bool arena_duel(const arena_settings_t *settings, unsigned long long first_seed,
 	/* and they meet once more */
 	arena_stage(settings, &first, &first_after, &second, &second_after,
 	            &duel->stages[DUEL_TOGETHER]);
+
+	return true;
+}
+
+/*
+ * Puts the models in order by a measure, best first. The measure is a
+ * number where bigger is better.
+ */
+static void league_rank(arena_league_t *league, int *ranking,
+                        double (*measure)(const league_model_t *))
+{
+	for (int i = 0; i < league->models; i++)
+		ranking[i] = i;
+
+	/* a plain sort, so that two models that are the same keep the order
+	 * they were given */
+	for (int i = 1; i < league->models; i++) {
+		int model = ranking[i];
+		int j = i - 1;
+
+		while (j >= 0 && measure(&league->model[ranking[j]]) <
+		                  measure(&league->model[model])) {
+			ranking[j + 1] = ranking[j];
+			j--;
+		}
+
+		ranking[j + 1] = model;
+	}
+}
+
+/* How well it learned from its own games: the less worth it gave away in
+ * the positions it visited while learning, the better. */
+static double measure_training(const league_model_t *model)
+{
+	return -model->training_value_lost;
+}
+
+/* How well it did in the league, against every other model. */
+static double measure_league(const league_model_t *model)
+{
+	return model->points;
+}
+
+/* How well it did against the models of the other kind. */
+static double measure_general(const league_model_t *model)
+{
+	return model->other_points;
+}
+
+/*
+ * Builds one model and teaches it, and says how well it learned.
+ */
+static bool league_build_one(const arena_settings_t *settings, unsigned long long seed,
+                             league_teacher_t teacher, network_t *network,
+                             policy_t *policy, trainer_t *trainer,
+                             league_model_t *record)
+{
+	arena_look_t look;
+	rng_t rng;
+
+	rng_seed(&rng, seed);
+
+	if (!arena_build(network, settings, INIT_RANDOM, &rng)) return false;
+
+	trainer_init(trainer, network, settings->learning_rate);
+	policy_init(policy, network, seed, settings->temperature);
+
+	if (teacher == LEAGUE_TRUTH)
+		arena_learn_from_the_truth(trainer, policy, settings->training_games);
+	else
+		trainer_run(trainer, policy, settings->training_games);
+
+	arena_measure(settings, network, &look);
+
+	record->seed = seed;
+	record->teacher = teacher;
+	record->training_value_lost = look.own_skill.moves > 0 ?
+		look.own_skill.value_lost / look.own_skill.moves : 0.0;
+	record->truth = look.evaluation.truth_error;
+	record->value_lost = look.skill.moves > 0 ?
+		look.skill.value_lost / look.skill.moves : 0.0;
+	record->perfect_draws = look.perfect.draws;
+	record->perfect_losses = look.perfect.losses;
+
+	return true;
+}
+
+bool arena_league(const arena_settings_t *settings, int models,
+                  arena_league_t *league)
+{
+	network_t *network = NULL;
+	policy_t *policy = NULL;
+	trainer_t *trainer = NULL;
+	rng_t rng;
+
+	if (settings == NULL || league == NULL) return false;
+	if (models < 2 || models > ARENA_MAX_MODELS) return false;
+	if (settings->training_games < 0 || settings->evaluation_games < 1) return false;
+	if (settings->match_games < 1) return false;
+	if (settings->hidden_neurons < 1) return false;
+
+	memset(league, 0, sizeof(*league));
+
+	/* the models are far too big to hold on the stack all at once */
+	network = malloc(sizeof(*network) * (size_t)models);
+	policy = malloc(sizeof(*policy) * (size_t)models);
+	trainer = malloc(sizeof(*trainer) * (size_t)models);
+
+	if (network == NULL || policy == NULL || trainer == NULL) {
+		free(network);
+		free(policy);
+		free(trainer);
+		return false;
+	}
+
+	league->models = models;
+
+	/* half the models are taught by the perfect player and half learn from
+	 * their own games, so the league holds opponents of two kinds */
+	for (int i = 0; i < models; i++) {
+		league_teacher_t teacher = (i % 2 == 0) ? LEAGUE_TRUTH : LEAGUE_SELF;
+		unsigned long long seed = settings->training_seed + (unsigned long long)i;
+
+		if (!league_build_one(settings, seed, teacher, &network[i], &policy[i],
+		                      &trainer[i], &league->model[i])) {
+			free(network);
+			free(policy);
+			free(trainer);
+			return false;
+		}
+	}
+
+	/* and every model plays every other one */
+	rng_seed(&rng, settings->evaluation_seed);
+
+	for (int i = 0; i < models; i++) {
+		for (int j = i + 1; j < models; j++) {
+			match_result_t match;
+			int first_points;
+			int second_points;
+			int same_kind;
+
+			evaluate_against(&network[i], &network[j], settings->evaluation_seed,
+			                 settings->match_games, 0.0, &match);
+
+			first_points = 3 * match.first_wins + match.draws;
+			second_points = 3 * match.second_wins + match.draws;
+
+			league->model[i].wins += match.first_wins;
+			league->model[i].draws += match.draws;
+			league->model[i].losses += match.second_wins;
+			league->model[i].points += first_points;
+
+			league->model[j].wins += match.second_wins;
+			league->model[j].draws += match.draws;
+			league->model[j].losses += match.first_wins;
+			league->model[j].points += second_points;
+
+			same_kind = (league->model[i].teacher == league->model[j].teacher);
+
+			if (same_kind) {
+				league->model[i].same_points += first_points;
+				league->model[j].same_points += second_points;
+			} else {
+				league->model[i].other_points += first_points;
+				league->model[j].other_points += second_points;
+			}
+		}
+	}
+
+	/* and the champion is the one with the most points */
+	league->champion = league->ranking_league[0];
+
+	league_rank(league, league->ranking_training, measure_training);
+	league_rank(league, league->ranking_league, measure_league);
+	league_rank(league, league->ranking_general, measure_general);
+
+	/* the champion is the one at the top of the league table */
+	league->champion = league->ranking_league[0];
+
+	free(network);
+	free(policy);
+	free(trainer);
 
 	return true;
 }

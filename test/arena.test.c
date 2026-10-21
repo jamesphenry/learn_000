@@ -586,6 +586,117 @@ static char *test_a_duel_refuses_bad_arguments(void)
 	return NULL;
 }
 
+static char *test_a_league_plays_every_pair(void)
+{
+	arena_settings_t settings;
+	arena_league_t league;
+
+	build_small_settings(&settings);
+	settings.match_games = 10;
+
+	_it_should("run", arena_league(&settings, 8, &league));
+
+	_it_should("hold every model", league.models == 8);
+
+	/* every model plays every other one, and the points are added up */
+	for (int i = 0; i < league.models; i++) {
+		int games = league.model[i].wins + league.model[i].draws +
+		            league.model[i].losses;
+
+		_it_should("play every other model", games == (league.models - 1) *
+			settings.match_games);
+		_it_should("count its points from its results",
+			league.model[i].points == 3 * league.model[i].wins + league.model[i].draws);
+	}
+
+	_it_should("crown a champion", league.champion >= 0 && league.champion < league.models);
+	_it_should("crown the model with the most points",
+		league.model[league.champion].points ==
+		league.model[league.ranking_league[0]].points);
+
+	return NULL;
+}
+
+static char *test_every_model_in_a_league_has_a_seed_of_its_own(void)
+{
+	arena_settings_t settings;
+	arena_league_t league;
+
+	build_small_settings(&settings);
+
+	arena_league(&settings, 8, &league);
+
+	for (int i = 0; i < league.models; i++)
+		_it_should("give each model a seed of its own",
+			league.model[i].seed != league.model[(i + 1) % league.models].seed);
+
+	return NULL;
+}
+
+static char *test_the_three_rankings_of_a_league_are_in_order(void)
+{
+	arena_settings_t settings;
+	arena_league_t league;
+
+	build_small_settings(&settings);
+
+	arena_league(&settings, 8, &league);
+
+	for (int i = 1; i < league.models; i++) {
+		/* the less worth it gave away while learning, the better it
+		 * learned, so the order is the other way up */
+		_it_should("put the models in the order of how well they learned",
+			league.model[league.ranking_training[i - 1]].training_value_lost <=
+			league.model[league.ranking_training[i]].training_value_lost);
+		_it_should("put the models in the order of their points",
+			league.model[league.ranking_league[i - 1]].points >=
+			league.model[league.ranking_league[i]].points);
+		_it_should("put the models in the order of how they did against the"
+			   " models of the other kind",
+			league.model[league.ranking_general[i - 1]].other_points >=
+			league.model[league.ranking_general[i]].other_points);
+	}
+
+	return NULL;
+}
+
+static char *test_the_same_league_comes_again(void)
+{
+	arena_settings_t settings;
+	arena_league_t first;
+	arena_league_t second;
+
+	build_small_settings(&settings);
+
+	arena_league(&settings, 8, &first);
+	arena_league(&settings, 8, &second);
+
+	_it_should("give the same champion", first.champion == second.champion);
+	_it_should("give the same points",
+		first.model[first.champion].points == second.model[second.champion].points);
+	_it_should("give the same truth for the champion",
+		nearly_equal(first.model[first.champion].truth,
+		             second.model[second.champion].truth));
+
+	return NULL;
+}
+
+static char *test_a_league_refuses_bad_arguments(void)
+{
+	arena_settings_t settings;
+	arena_league_t league;
+
+	build_small_settings(&settings);
+
+	_it_should("refuse no settings", !arena_league(NULL, 8, &league));
+	_it_should("refuse nowhere to put the league", !arena_league(&settings, 8, NULL));
+	_it_should("refuse one model", !arena_league(&settings, 1, &league));
+	_it_should("refuse more models than it holds",
+		!arena_league(&settings, ARENA_MAX_MODELS + 1, &league));
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	_run_test(test_the_settings_start_with_sensible_values);
@@ -611,6 +722,11 @@ static char *run_tests()
 	_run_test(test_both_models_learn_from_the_games_they_play_together);
 	_run_test(test_the_same_duel_comes_again);
 	_run_test(test_a_duel_refuses_bad_arguments);
+	_run_test(test_a_league_plays_every_pair);
+	_run_test(test_every_model_in_a_league_has_a_seed_of_its_own);
+	_run_test(test_the_three_rankings_of_a_league_are_in_order);
+	_run_test(test_the_same_league_comes_again);
+	_run_test(test_a_league_refuses_bad_arguments);
 
 	return NULL;
 }

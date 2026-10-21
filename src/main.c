@@ -453,9 +453,59 @@ static void run_the_duel(void)
 	       duel.together_games.games);
 }
 
+/*
+ * A league: a number of models, each with a seed of its own, every model
+ * playing every other one, and the points added up.
+ *
+ * Half of them are taught by the perfect player and half learn from their
+ * own games, so the league holds opponents of two kinds. Three rankings come
+ * out of it, and they do not agree: how well a model learned, how well it
+ * did in the league, and how well it did against models of the other kind.
+ */
+static void run_the_league(int models)
+{
+	arena_settings_t settings;
+	arena_league_t league;
+	const char *names[3] = { "training", "league", "general" };
+
+	arena_settings_init(&settings);
+	settings.training_games = 20000;
+
+	printf("\nthe league\n");
+	printf("  %d models, %d games of training each, %d games a match\n\n",
+	       models, settings.training_games, settings.match_games);
+
+	if (!arena_league(&settings, models, &league)) {
+		printf("  the league could not be run\n");
+		return;
+	}
+
+	printf("  %-12s %6s %8s %10s %8s\n", "ranking", "seed", "taught",
+	       "gave away", "points");
+
+	int leaders[3] = {
+		league.ranking_training[0],
+		league.ranking_league[0],
+		league.ranking_general[0]
+	};
+
+	for (int i = 0; i < 3; i++) {
+		int model = leaders[i];
+
+		printf("  %-12s %6llu %8s %10.3f %8d\n", names[i],
+		       league.model[model].seed,
+		       league.model[model].teacher == LEAGUE_TRUTH ? "truth" : "self",
+		       league.model[model].training_value_lost,
+		       league.model[model].points);
+	}
+
+	printf("\n  the champion is model %d, with the seed %llu: %d won, %d drawn,"
+	       " %d lost\n", league.champion, league.model[league.champion].seed,
+	       league.model[league.champion].wins, league.model[league.champion].draws,
+	       league.model[league.champion].losses);
+}
+
 int main(int argc, char *argv[], char *env[]) {
-	UNUSED(argc);
-	UNUSED(argv);
 	UNUSED(env);
 
 	greet("Hello, World!");
@@ -482,6 +532,9 @@ int main(int argc, char *argv[], char *env[]) {
 
 	printf("\n");
 	run_the_duel();
+
+	printf("\n");
+	run_the_league(argc > 1 ? atoi(argv[1]) : 12);
 
 	return EXIT_SUCCESS;
 }

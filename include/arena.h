@@ -177,4 +177,75 @@ typedef struct {
 bool arena_duel(const arena_settings_t *settings, unsigned long long first_seed,
                 unsigned long long second_seed, arena_duel_t *duel);
 
+/* How many models a league holds. */
+#define ARENA_MAX_MODELS 128
+
+/* How a model in a league is taught. */
+typedef enum {
+	LEAGUE_SELF,  /* from the result of the games it plays against itself */
+	LEAGUE_TRUTH  /* by the perfect player, which says what a position is worth */
+} league_teacher_t;
+
+/* One model in a league. */
+typedef struct {
+	unsigned long long seed;  /* the seed it was started off with */
+	league_teacher_t teacher;  /* and how it was taught */
+
+	/* how well it learned from its own games: the worth it gave away in the
+	 * positions it visited while learning */
+	double training_value_lost;
+
+	/* how far it is from the truth, over the positions it reaches against
+	 * an opponent that plays at random */
+	double truth;
+	double value_lost;
+
+	/* the games it drew and lost against the perfect player */
+	int perfect_draws;
+	int perfect_losses;
+
+	/* its record in the league, against every other model */
+	int wins;
+	int draws;
+	int losses;
+	int points;         /* three for a win, one for a draw */
+	int same_points;    /* the points against the models of its own kind */
+	int other_points;   /* and against the models of the other kind */
+} league_model_t;
+
+/* A whole league. */
+typedef struct {
+	int models;
+	league_model_t model[ARENA_MAX_MODELS];
+
+	/* the model with the most points */
+	int champion;
+
+	/* and the models in three different orders, because they say three
+	 * different things:
+	 *
+	 *   training   how well it learned from its own games
+	 *   league     how well it did against every other model
+	 *   general    how well it did against models of another kind
+	 */
+	int ranking_training[ARENA_MAX_MODELS];
+	int ranking_league[ARENA_MAX_MODELS];
+	int ranking_general[ARENA_MAX_MODELS];
+} arena_league_t;
+
+/*
+ * Builds a number of models, each with a seed of its own, and plays a
+ * league with them: every model plays every other one, and the points they
+ * earn are added up.
+ *
+ * Half of them are taught by the perfect player and half learn from their
+ * own games, so that the league holds opponents of two different kinds.
+ *
+ * A league rather than a knockout, because a knockout of models that draw
+ * most of their games against each other is decided by luck.
+ */
+bool arena_league(const arena_settings_t *settings, int models,
+                  arena_league_t *league);
+
+
 #endif // ARENA_H
