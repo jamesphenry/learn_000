@@ -68,10 +68,12 @@ TST=test/game.test.c make test
 ## What we found
 
 The short version: **a network started at random learns the game; one
-started at zero never does; one started with every weight at the same large
-value cannot learn from a win at all.** The last of those is not a hunch —
-the output layer's sum starts at 17, the sigmoid is pinned at one, and the
-gradient towards a winning target is exactly zero.
+started at zero never does; and every network started with all the weights
+the same fails, whatever the value they are given.** The sameness, not the
+size, is what does it — a weight of 1.0 and a weight of 100.0 are very
+different experiments and they fail in the same way. The one that is
+pinned is the large one: its output's sum starts at 17, the sigmoid sits
+at one, and the pull of a win towards it is exactly zero.
 
 Getting to that answer took some fixing first. The measurement that looked
 like it was measuring skill was measuring the model on the positions it

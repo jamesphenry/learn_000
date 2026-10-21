@@ -118,13 +118,14 @@ player — the same as a player that had never heard of the game.
 ### Random: learns the game
 
 Small random values, so the neurons start out different from one another
-and the hidden sums gather around zero. The output's sum starts between 0.2
-and 0.7, the sigmoid is nowhere near pinned, and the pull towards a winning
-target is 0.38 — nearly as much as the pull towards a losing one.
+and the hidden sums gather around zero. The output's sum starts between
+-0.06 and 1.02, the sigmoid is nowhere near pinned, and the pull towards a
+winning target is 0.38 — nearly as much as the pull towards a losing one.
 
-It draws every game against the perfect player, and beats the model that
-started with every mark the same value in every single game of the round
-robin.
+It draws every game against the perfect player, and it is the model that
+wins the round robin: over five runs it won 1,313 games against the other
+two models, where the model that started with every mark the same value
+won 588.
 
 ### Maximum: cannot learn from a win
 
