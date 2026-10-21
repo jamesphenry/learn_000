@@ -132,7 +132,7 @@ static char *test_the_game_ends_when_there_are_no_stones_left(void)
 	return NULL;
 }
 
-static char *test_the_features_are_the_sizes_of_the_heaps(void)
+static char *test_the_features_are_the_sizes_of_the_heaps_as_a_fraction(void)
 {
 	game_position_t position;
 	double features[NIM_HEAPS];
@@ -141,9 +141,9 @@ static char *test_the_features_are_the_sizes_of_the_heaps(void)
 
 	game.features(&position, features);
 
-	_it_should("give the first heap", features[0] == 1.0);
-	_it_should("give the second heap", features[1] == 2.0);
-	_it_should("give the third heap", features[2] == 3.0);
+	_it_should("give the first heap", features[0] == 1.0 / NIM_MAX_HEAP);
+	_it_should("give the second heap", features[1] == 2.0 / NIM_MAX_HEAP);
+	_it_should("give the third heap", features[2] == 3.0 / NIM_MAX_HEAP);
 	return NULL;
 }
 
@@ -300,7 +300,7 @@ static char *run_tests()
 	_run_test(test_a_move_takes_stones_from_a_heap);
 	_run_test(test_it_refuses_an_illegal_move);
 	_run_test(test_the_game_ends_when_there_are_no_stones_left);
-	_run_test(test_the_features_are_the_sizes_of_the_heaps);
+	_run_test(test_the_features_are_the_sizes_of_the_heaps_as_a_fraction);
 	_run_test(test_the_perfect_player_knows_what_a_position_is_worth);
 	_run_test(test_the_perfect_player_leaves_a_position_that_is_worth_nothing);
 	_run_test(test_the_rule_agrees_with_a_search);

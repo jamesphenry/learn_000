@@ -90,12 +90,18 @@ static bool nim_play(game_position_t *position, game_move_t move)
 	return true;
 }
 
+/*
+ * The features are the sizes of the heaps, as a fraction of the biggest heap
+ * there is, so that they lie between nought and one. The tic-tac-toe board is
+ * given to the model in the same range, and a model that is given numbers of
+ * very different sizes is not the same experiment twice.
+ */
 static void nim_features(const game_position_t *position, double *out)
 {
 	const nim_t *nim = nim_state_of(position);
 
 	for (int heap = 0; heap < NIM_HEAPS; heap++)
-		out[heap] = (double)nim->heaps[heap];
+		out[heap] = (double)nim->heaps[heap] / (double)NIM_MAX_HEAP;
 }
 
 static int nim_to_move(const game_position_t *position)
