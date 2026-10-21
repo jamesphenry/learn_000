@@ -65,6 +65,14 @@ To run one test:
 TST=test/game.test.c make test
 ```
 
+The demonstration takes the number of models for the league, and prints the
+whole table of the league when the word `table` is given as well:
+
+```sh
+./src/learn_000 100        # a league of a hundred models
+./src/learn_000 100 table  # the same, with the whole table of the league
+```
+
 ## What we found
 
 The short version: **a network started at random learns the game; one
@@ -79,7 +87,8 @@ Getting to that answer took some fixing first. The measurement that looked
 like it was measuring skill was measuring the model on the positions it
 already knew, and the model could not learn at all until the shape of the
 network, the activation and the target were changed. All of it is written
-up in [FINDINGS.md](FINDINGS.md).
+up in [FINDINGS.md](docs/FINDINGS.md), and every measurement is logged with
+the date it was taken in [RESULTS.md](docs/RESULTS.md).
 
 The results, over five runs with a seed of their own, and then again with
 the game of Nim:
@@ -143,7 +152,7 @@ their own games. It produces **three rankings that do not agree**:
 measure and the league. The champion was sixty-fifth by the training
 measure, the model that topped the training measure came thirty-fourth in
 the league, and the champion turned out to be a model that taught itself.
-The whole of it is written up in [LEAGUE.md](LEAGUE.md).
+The whole of it is written up in [LEAGUE.md](docs/LEAGUE.md).
 
 The general ranking is a controlled test: four models are held back from
 the league and every model is measured against them, so the comparison is
@@ -223,17 +232,23 @@ learn_000
 ├── test
 │   ├── test-runner
 │   └── *.test.c
+├── docs
+│   ├── FINDINGS.md
+│   ├── LEAGUE.md
+│   ├── RESULTS.md
+│   └── notes.md
 ├── CHANGELOG.md
-├── FINDINGS.md
-├── LEAGUE.md
 ├── LICENSE.md
 ├── Makefile
-├── README.md
-└── notes.md
+└── README.md
 ```
 
-`notes.md` holds the thinking behind the project, including the questions
-this was built to answer.
+`docs/` holds the documentation: what was found and what it means
+([FINDINGS.md](docs/FINDINGS.md)), the league of a hundred models
+([LEAGUE.md](docs/LEAGUE.md)), a log of the measurements with the date each
+was taken ([RESULTS.md](docs/RESULTS.md)), and the thinking behind the
+project, including the questions this was built to answer
+([notes.md](docs/notes.md)).
 
 ## Licence
 

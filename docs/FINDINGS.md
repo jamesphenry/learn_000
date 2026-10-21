@@ -6,7 +6,9 @@ what came out of the experiment, and what had to be fixed before the
 question could be answered at all.
 
 Everything here is measured. Where a number appears it was produced by the
-code in this repository, and the way to reproduce it is given.
+code in this repository, and the way to reproduce it is given. The
+measurements themselves are logged, with the date each was taken, in
+[RESULTS.md](RESULTS.md).
 
 Two things to keep in mind when reading it. The worth of a position used to
 mean "the chance that X wins it", and now it means "the chance that the

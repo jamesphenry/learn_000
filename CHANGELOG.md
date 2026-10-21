@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   - Added the game of Nim, in `games/nim/`, with its own tests.
   - Added a league of a hundred models in the game of Nim, which is written
-    up in `LEAGUE.md`.
+    up in `docs/LEAGUE.md`.
+  - Added `docs/RESULTS.md`, a log of the measurements with the date each was
+    taken and the way to reproduce it.
   - Added the whole table of the league to the demonstration, which comes out
     of it when the word `table` is given as well.
   - Added a perfect player that needs no memory of its own: the perfect
@@ -36,3 +38,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The tests are run under valgrind when it is installed, and a memory error
     fails the build.
   - The demonstration plays the game of Nim as well as tic-tac-toe.
+  - The documentation was gathered into `docs/`: `FINDINGS.md`, `LEAGUE.md`
+    and `notes.md` moved there, and `README.md` and `CHANGELOG.md` stayed
+    at the top where they are expected.

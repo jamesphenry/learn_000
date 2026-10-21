@@ -3,6 +3,10 @@
 A hundred models, each with a seed of its own, every one of them playing
 every other one. The points are added up and the champion is crowned.
 
+The measurements are logged, with the date they were taken, in
+[RESULTS.md](RESULTS.md), and what they mean is in
+[FINDINGS.md](FINDINGS.md).
+
 Half of the models are taught by the perfect player, which says what each
 position is worth. Half learn from the result of the games they play
 against themselves, with nobody to tell them the answers. So the league
@@ -180,6 +184,14 @@ Nim. The demonstration builds both leagues:
 
 ```sh
 ./src/learn_000 100
+```
+
+and the whole table of the league comes out of the same program when the
+word `table` is given as well, so that every figure below can be counted
+again:
+
+```sh
+./src/learn_000 100 table
 ```
 
 ```
