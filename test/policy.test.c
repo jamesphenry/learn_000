@@ -19,10 +19,10 @@
 static void build_the_test_network(network_t *network, board_cell_t favourite)
 {
 	network_init(network);
-	network_add_layer(network, CELL_COUNT, 1, ACTIVATION_RELU);
+	network_add_layer(network, CELL_COUNT, 1, ACTIVATION_CLAMP);
 	network->layers[0].weights[0][0] = 1.0;
 
-	network_add_layer(network, 1, CELL_COUNT, ACTIVATION_RELU);
+	network_add_layer(network, 1, CELL_COUNT, ACTIVATION_CLAMP);
 	network->layers[1].weights[favourite][0] = 1.0;
 }
 
@@ -277,8 +277,8 @@ static char *test_a_tie_is_broken_at_random(void)
 
 	/* a network whose scores are all the same, so every cell is a tie */
 	network_init(&network);
-	network_add_layer(&network, CELL_COUNT, 1, ACTIVATION_RELU);
-	network_add_layer(&network, 1, CELL_COUNT, ACTIVATION_RELU);
+	network_add_layer(&network, CELL_COUNT, 1, ACTIVATION_CLAMP);
+	network_add_layer(&network, 1, CELL_COUNT, ACTIVATION_CLAMP);
 
 	board_init(&board);
 

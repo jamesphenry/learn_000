@@ -42,9 +42,9 @@ static void build_out_weights(layer_t *out)
 
 static void build_the_two_layers(layer_t *hidden, layer_t *out)
 {
-	layer_init(hidden, 2, 2, ACTIVATION_RELU);
+	layer_init(hidden, 2, 2, ACTIVATION_CLAMP);
 	build_hidden_weights(hidden);
-	layer_init(out, 2, 1, ACTIVATION_RELU);
+	layer_init(out, 2, 1, ACTIVATION_CLAMP);
 	build_out_weights(out);
 }
 
@@ -83,12 +83,12 @@ static char *test_two_layers_compose_when_the_hidden_layer_clamps(void)
 	layer_forward(&hidden, inputs, 2, hidden_out, 2);
 	layer_forward(&out, hidden_out, 2, outputs, 1);
 
-	/* hidden: 1 - 3 = -2 becomes 0, and 1 + 3 = 4 */
+	/* hidden: 1 - 3 = -2 goes on the floor, and 1 + 3 = 4 */
 	_it_should("let the hidden layer clamp its own sum",
-		nearly_equal(hidden_out[0], 0.0) && nearly_equal(hidden_out[1], 4.0));
-	/* out: 2 * 0 + 3 * 4 - 1 = 11 */
+		nearly_equal(hidden_out[0], NEURON_FLOOR) && nearly_equal(hidden_out[1], 4.0));
+	/* out: 2 * -1 + 3 * 4 - 1 = 9 */
 	_it_should("carry the clamped value into the next layer",
-		nearly_equal(outputs[0], 11.0));
+		nearly_equal(outputs[0], 9.0));
 
 	return NULL;
 }
@@ -106,10 +106,11 @@ static char *test_two_layers_compose_when_the_last_sum_is_negative(void)
 	layer_forward(&hidden, inputs, 2, hidden_out, 2);
 	layer_forward(&out, hidden_out, 2, outputs, 1);
 
-	/* hidden: -1 + 1 = 0 and -1 - 1 = -2, both become 0 */
-	_it_should("clamp both hidden sums", nearly_equal(hidden_out[0], 0.0) && nearly_equal(hidden_out[1], 0.0));
-	/* out: 2 * 0 + 3 * 0 - 1 = -1, which becomes 0 */
-	_it_should("clamp the last sum", nearly_equal(outputs[0], 0.0));
+	/* hidden: -1 + 1 = 0 and -1 - 1 = -2, so 0 and the floor */
+	_it_should("clamp both hidden sums",
+		nearly_equal(hidden_out[0], 0.0) && nearly_equal(hidden_out[1], NEURON_FLOOR));
+	/* out: 2 * 0 + 3 * -1 - 1 = -4, which goes on the floor */
+	_it_should("clamp the last sum", nearly_equal(outputs[0], NEURON_FLOOR));
 
 	return NULL;
 }
@@ -124,12 +125,12 @@ static char *test_the_board_feeds_a_two_layer_network(void)
 	double outputs[CELL_COUNT];
 
 	/* hidden: picks the first two cells out of the board */
-	layer_init(&hidden, CELL_COUNT, 2, ACTIVATION_RELU);
+	layer_init(&hidden, CELL_COUNT, 2, ACTIVATION_CLAMP);
 	hidden.weights[0][0] = 1.0;
 	hidden.weights[1][1] = 1.0;
 
 	/* out: one neuron per cell, each reading the first hidden value */
-	layer_init(&out, 2, CELL_COUNT, ACTIVATION_RELU);
+	layer_init(&out, 2, CELL_COUNT, ACTIVATION_CLAMP);
 	out.weights[0][0] = 2.0;
 	out.weights[1][0] = -1.0;
 
@@ -145,10 +146,10 @@ static char *test_the_board_feeds_a_two_layer_network(void)
 	/* the board holds one X and no O, so the hidden layer sees 1 and 0 */
 	_it_should("read the board into the hidden layer",
 		nearly_equal(hidden_out[0], 1.0) && nearly_equal(hidden_out[1], 0.0));
-	/* the first output is 2 * 1 = 2, the second is -1 * 1 = 0, the rest 0 */
+	/* the first output is 2 * 1 = 2, the second is -1 * 1 = -1, the rest 0 */
 	_it_should("give one output per cell", nearly_equal(outputs[0], 2.0));
 	_it_should("leave the other outputs at zero",
-		nearly_equal(outputs[1], 0.0) && nearly_equal(outputs[8], 0.0));
+		nearly_equal(outputs[1], NEURON_FLOOR) && nearly_equal(outputs[8], 0.0));
 
 	return NULL;
 }
@@ -173,12 +174,12 @@ static char *test_network_add_layer(void)
 
 	network_init(&network);
 
-	_it_should("take the first layer", network_add_layer(&network, 9, 16, ACTIVATION_RELU));
+	_it_should("take the first layer", network_add_layer(&network, 9, 16, ACTIVATION_CLAMP));
 	_it_should("count the layer", network.n_layers == 1);
 	_it_should("take the width of the first layer", network_input_size(&network) == 9);
 	_it_should("give the width of the last layer", network_output_size(&network) == 16);
 
-	_it_should("take the second layer", network_add_layer(&network, 16, 9, ACTIVATION_RELU));
+	_it_should("take the second layer", network_add_layer(&network, 16, 9, ACTIVATION_CLAMP));
 	_it_should("count both layers", network.n_layers == 2);
 	_it_should("still take the width of the first layer", network_input_size(&network) == 9);
 	_it_should("give the width of the last layer", network_output_size(&network) == 9);
@@ -191,15 +192,15 @@ static char *test_network_add_layer_refuses_a_mismatched_join(void)
 	network_t network;
 
 	network_init(&network);
-	network_add_layer(&network, 9, 16, ACTIVATION_RELU);
+	network_add_layer(&network, 9, 16, ACTIVATION_CLAMP);
 
 	/* the second layer takes 3 inputs, but the first gives 16 */
 	_it_should("refuse a layer that does not take what the last one gave",
-		!network_add_layer(&network, 3, 9, ACTIVATION_RELU));
+		!network_add_layer(&network, 3, 9, ACTIVATION_CLAMP));
 	_it_should("leave the network as it was", network.n_layers == 1);
 	_it_should("still give the width of the last layer", network_output_size(&network) == 16);
 
-	_it_should("take a layer that does", network_add_layer(&network, 16, 9, ACTIVATION_RELU));
+	_it_should("take a layer that does", network_add_layer(&network, 16, 9, ACTIVATION_CLAMP));
 
 	return NULL;
 }
@@ -211,9 +212,9 @@ static char *test_network_add_layer_refuses_when_full(void)
 	network_init(&network);
 
 	for (int i = 0; i < NETWORK_MAX_LAYERS; i++)
-		_it_should("take a layer", network_add_layer(&network, 4, 4, ACTIVATION_RELU));
+		_it_should("take a layer", network_add_layer(&network, 4, 4, ACTIVATION_CLAMP));
 
-	_it_should("refuse one layer too many", !network_add_layer(&network, 4, 4, ACTIVATION_RELU));
+	_it_should("refuse one layer too many", !network_add_layer(&network, 4, 4, ACTIVATION_CLAMP));
 	_it_should("leave the count alone", network.n_layers == NETWORK_MAX_LAYERS);
 
 	return NULL;
@@ -236,9 +237,9 @@ static char *test_network_forward_matches_the_manual_chain(void)
 
 	/* and the same two layers, put together by the network */
 	network_init(&network);
-	network_add_layer(&network, 2, 2, ACTIVATION_RELU);
+	network_add_layer(&network, 2, 2, ACTIVATION_CLAMP);
 	build_hidden_weights(&network.layers[0]);
-	network_add_layer(&network, 2, 1, ACTIVATION_RELU);
+	network_add_layer(&network, 2, 1, ACTIVATION_CLAMP);
 	build_out_weights(&network.layers[1]);
 	network_forward(&network, inputs, 2, network_out, 1);
 
@@ -256,15 +257,15 @@ static char *test_network_forward_clamps_at_each_layer(void)
 	double outputs[1];
 
 	network_init(&network);
-	network_add_layer(&network, 2, 2, ACTIVATION_RELU);
+	network_add_layer(&network, 2, 2, ACTIVATION_CLAMP);
 	build_hidden_weights(&network.layers[0]);
-	network_add_layer(&network, 2, 1, ACTIVATION_RELU);
+	network_add_layer(&network, 2, 1, ACTIVATION_CLAMP);
 	build_out_weights(&network.layers[1]);
 
 	network_forward(&network, inputs, 2, outputs, 1);
 
-	/* hidden: 1 - 3 = -2 becomes 0, out: 2 * 0 + 3 * 4 - 1 = 11 */
-	_it_should("clamp inside the network", nearly_equal(outputs[0], 11.0));
+	/* hidden: 1 - 3 = -2 goes on the floor, out: 2 * -1 + 3 * 4 - 1 = 9 */
+	_it_should("clamp inside the network", nearly_equal(outputs[0], 9.0));
 
 	return NULL;
 }
@@ -276,7 +277,7 @@ static char *test_network_forward_with_one_layer(void)
 	double outputs[1];
 
 	network_init(&network);
-	network_add_layer(&network, 2, 1, ACTIVATION_RELU);
+	network_add_layer(&network, 2, 1, ACTIVATION_CLAMP);
 	build_out_weights(&network.layers[0]);
 
 	network_forward(&network, inputs, 2, outputs, 1);
@@ -295,10 +296,10 @@ static char *test_the_board_feeds_a_network(void)
 	double outputs[CELL_COUNT];
 
 	network_init(&network);
-	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_RELU);
+	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_CLAMP);
 	network.layers[0].weights[0][0] = 1.0;
 	network.layers[0].weights[1][1] = 1.0;
-	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_RELU);
+	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_CLAMP);
 	network.layers[1].weights[0][0] = 2.0;
 	network.layers[1].weights[1][0] = -1.0;
 
@@ -312,7 +313,7 @@ static char *test_the_board_feeds_a_network(void)
 
 	_it_should("give one output per cell", nearly_equal(outputs[0], 2.0));
 	_it_should("leave the other outputs at zero",
-		nearly_equal(outputs[1], 0.0) && nearly_equal(outputs[8], 0.0));
+		nearly_equal(outputs[1], NEURON_FLOOR) && nearly_equal(outputs[8], 0.0));
 
 	return NULL;
 }
@@ -324,7 +325,7 @@ static char *test_network_forward_null_arguments(void)
 	double outputs[1] = {0.0};
 
 	network_init(&network);
-	network_add_layer(&network, 2, 1, ACTIVATION_RELU);
+	network_add_layer(&network, 2, 1, ACTIVATION_CLAMP);
 	build_out_weights(&network.layers[0]);
 
 	_it_should("refuse a null network", !network_forward(NULL, inputs, 2, outputs, 1));
@@ -357,8 +358,8 @@ static char *test_network_forward_with_a_broken_join(void)
 	double outputs[1] = {0.0};
 
 	network_init(&network);
-	network_add_layer(&network, 2, 2, ACTIVATION_RELU);
-	network_add_layer(&network, 2, 1, ACTIVATION_RELU);
+	network_add_layer(&network, 2, 2, ACTIVATION_CLAMP);
+	network_add_layer(&network, 2, 1, ACTIVATION_CLAMP);
 	build_out_weights(&network.layers[1]);
 
 	/* the first layer now gives 3, but the second one takes 2 */
@@ -378,7 +379,7 @@ static char *test_network_forward_buffers_too_small(void)
 	double outputs[2] = {0.0, 0.0};
 
 	network_init(&network);
-	network_add_layer(&network, 2, 1, ACTIVATION_RELU);
+	network_add_layer(&network, 2, 1, ACTIVATION_CLAMP);
 	build_out_weights(&network.layers[0]);
 
 	_it_should("refuse too few inputs", !network_forward(&network, inputs, 1, outputs, 1));
@@ -395,8 +396,8 @@ static char *test_network_forward_with_swapped_layers(void)
 	double outputs[3] = {0.0, 0.0, 0.0};
 
 	network_init(&network);
-	network_add_layer(&network, 3, 3, ACTIVATION_RELU);
-	network_add_layer(&network, 3, 1, ACTIVATION_RELU);
+	network_add_layer(&network, 3, 3, ACTIVATION_CLAMP);
+	network_add_layer(&network, 3, 1, ACTIVATION_CLAMP);
 
 	/* swap the layers round: the one that gives 1 now feeds the one that
 	 * takes 3, and every layer is still perfectly valid on its own */
@@ -418,8 +419,8 @@ static char *test_network_forward_with_a_changed_layer_count(void)
 	double outputs[3] = {0.0, 0.0, 0.0};
 
 	network_init(&network);
-	network_add_layer(&network, 3, 3, ACTIVATION_RELU);
-	network_add_layer(&network, 3, 1, ACTIVATION_RELU);
+	network_add_layer(&network, 3, 3, ACTIVATION_CLAMP);
+	network_add_layer(&network, 3, 1, ACTIVATION_CLAMP);
 
 	/* the count now says there is one layer, but there are two */
 	network.n_layers = 1;
@@ -450,13 +451,13 @@ static char *test_a_real_board_gives_nine_scores(void)
 	/* hidden: one neuron for the top left and the middle, one for the
 	 * bottom right */
 	network_init(&network);
-	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_RELU);
+	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_CLAMP);
 	network.layers[0].weights[0][0] = 1.0;
 	network.layers[0].weights[0][4] = 1.0;
 	network.layers[0].weights[1][8] = 1.0;
 
 	/* out: one neuron per cell, each reading both hidden values */
-	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_RELU);
+	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_CLAMP);
 	for (int cell = 0; cell < CELL_COUNT; cell++) {
 		network.layers[1].weights[cell][0] = 1.0;
 		network.layers[1].weights[cell][1] = (double)(cell + 1);
@@ -490,11 +491,11 @@ static char *test_an_empty_board_gives_no_scores(void)
 	board_init(&board);
 
 	network_init(&network);
-	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_RELU);
+	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_CLAMP);
 	network.layers[0].weights[0][0] = 1.0;
 	network.layers[0].weights[0][4] = 1.0;
 	network.layers[0].weights[1][8] = 1.0;
-	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_RELU);
+	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_CLAMP);
 	for (int cell = 0; cell < CELL_COUNT; cell++) {
 		network.layers[1].weights[cell][0] = 1.0;
 		network.layers[1].weights[cell][1] = (double)(cell + 1);
@@ -522,12 +523,12 @@ static char *test_an_empty_board_gives_no_scores(void)
 static void build_the_experiment_network(network_t *network)
 {
 	network_init(network);
-	network_add_layer(network, CELL_COUNT, 2, ACTIVATION_RELU);
+	network_add_layer(network, CELL_COUNT, 2, ACTIVATION_CLAMP);
 	network->layers[0].weights[0][0] = 1.0;
 	network->layers[0].weights[0][1] = 1.0;
 	network->layers[0].weights[1][2] = 1.0;
 
-	network_add_layer(network, 2, CELL_COUNT, ACTIVATION_RELU);
+	network_add_layer(network, 2, CELL_COUNT, ACTIVATION_CLAMP);
 	for (int cell = 0; cell < CELL_COUNT; cell++) {
 		network->layers[1].weights[cell][0] = (double)(cell + 1);
 		network->layers[1].weights[cell][1] = 1.0;
@@ -716,7 +717,7 @@ static char *test_a_network_that_answers_with_a_probability(void)
 	double outputs[CELL_COUNT];
 
 	network_init(&network);
-	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_RELU);
+	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_CLAMP);
 	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_SIGMOID);
 
 	network_forward(&network, inputs, CELL_COUNT, outputs, CELL_COUNT);

@@ -3,9 +3,16 @@
 
 /* What a neuron does with its sum. */
 typedef enum {
-	ACTIVATION_RELU,
+	ACTIVATION_CLAMP,
 	ACTIVATION_SIGMOID
 } activation_t;
+
+/*
+ * The floor of the clamped activation. A sum that is a little negative
+ * keeps its value, so the opponent's marks stay visible to the layer above
+ * instead of being thrown away.
+ */
+#define NEURON_FLOOR (-1.0)
 
 /*
  * The weighted sum of the inputs plus the bias:
@@ -18,13 +25,15 @@ double neuron_weighted_sum(const double *inputs, const double *weights,
 			    int count, double bias);
 
 /*
- * The activation of the neuron: a rectified linear unit.
+ * The activation of the neuron: a rectified linear unit with a floor of -1
+ * rather than 0.
  *
- *     value > 0 ? value : 0
+ *     value < -1 ? -1 : value
  *
- * A positive value passes through unchanged, anything else becomes zero.
+ * A positive value passes through unchanged, and a negative one keeps its
+ * value down to the floor.
  */
-double neuron_relu(double value);
+double neuron_clamp(double value);
 
 /*
  * The activation of a neuron that answers with a probability:
@@ -42,9 +51,9 @@ double neuron_sigmoid(double value);
 double neuron_activate(double value, activation_t activation);
 
 /*
- * How much the activation changes for a small change in the sum. A relu
- * passes a positive sum on unchanged and stops a negative one dead, and a
- * sigmoid is flattest at its extremes.
+ * How much the activation changes for a small change in the sum. The clamp
+ * passes a sum above the floor on unchanged and stops one below it dead,
+ * and a sigmoid is flattest at its extremes.
  */
 double neuron_derivative(double value, activation_t activation);
 

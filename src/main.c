@@ -34,13 +34,13 @@ static void score_a_game(void)
 	place_mark(&board, CELL_CENTER, 'O');
 
 	network_init(&network);
-	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_RELU);
+	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_CLAMP);
 	network.layers[0].weights[0][0] = 1.0;
 	network.layers[0].weights[0][1] = 1.0;
 	network.layers[0].weights[1][2] = -1.0;
 	network.layers[0].biases[1] = 0.5;
 
-	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_RELU);
+	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_CLAMP);
 	network.layers[1].weights[2][0] = 1.0;
 	network.layers[1].weights[2][1] = -1.0;
 
@@ -70,12 +70,12 @@ static void score_a_game(void)
 static void build_the_experiment_network(network_t *network)
 {
 	network_init(network);
-	network_add_layer(network, CELL_COUNT, 2, ACTIVATION_RELU);
+	network_add_layer(network, CELL_COUNT, 2, ACTIVATION_CLAMP);
 	network->layers[0].weights[0][0] = 1.0;
 	network->layers[0].weights[0][1] = 1.0;
 	network->layers[0].weights[1][2] = 1.0;
 
-	network_add_layer(network, 2, CELL_COUNT, ACTIVATION_RELU);
+	network_add_layer(network, 2, CELL_COUNT, ACTIVATION_CLAMP);
 	for (int cell = 0; cell < CELL_COUNT; cell++) {
 		network->layers[1].weights[cell][0] = (double)(cell + 1);
 		network->layers[1].weights[cell][1] = 1.0;
@@ -160,13 +160,13 @@ static void play_a_game(void)
 	game_result_t result;
 
 	network_init(&network);
-	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_RELU);
+	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_CLAMP);
 	network.layers[0].weights[0][0] = 1.0;
 	network.layers[0].weights[0][1] = 1.0;
 	network.layers[0].weights[1][2] = -1.0;
 	network.layers[0].biases[1] = 0.5;
 
-	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_RELU);
+	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_CLAMP);
 	network.layers[1].weights[2][0] = 1.0;
 	network.layers[1].weights[2][1] = -1.0;
 
@@ -196,7 +196,7 @@ static void train_a_network(void)
 	double after[CELL_COUNT];
 
 	network_init(&network);
-	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_RELU);
+	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_CLAMP);
 	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_SIGMOID);
 
 	/* the hidden layer watches the two cells on the left of the top row */

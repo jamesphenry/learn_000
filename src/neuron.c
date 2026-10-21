@@ -12,9 +12,9 @@ double neuron_weighted_sum(const double *inputs, const double *weights,
 	return sum + bias;
 }
 
-double neuron_relu(double value)
+double neuron_clamp(double value)
 {
-	return fmax(0.0, value);
+	return fmax(NEURON_FLOOR, value);
 }
 
 double neuron_sigmoid(double value)
@@ -26,7 +26,7 @@ double neuron_activate(double value, activation_t activation)
 {
 	if (activation == ACTIVATION_SIGMOID) return neuron_sigmoid(value);
 
-	return neuron_relu(value);
+	return neuron_clamp(value);
 }
 
 double neuron_derivative(double value, activation_t activation)
@@ -37,5 +37,5 @@ double neuron_derivative(double value, activation_t activation)
 		return probability * (1.0 - probability);
 	}
 
-	return value > 0.0 ? 1.0 : 0.0;
+	return value > NEURON_FLOOR ? 1.0 : 0.0;
 }

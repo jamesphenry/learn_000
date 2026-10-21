@@ -19,15 +19,15 @@ static char *test_layer_init(void)
 {
 	layer_t layer;
 
-	_it_should("accept a layer that fits", layer_init(&layer, 9, 9, ACTIVATION_RELU));
+	_it_should("accept a layer that fits", layer_init(&layer, 9, 9, ACTIVATION_CLAMP));
 	_it_should("remember the number of inputs", layer.n_inputs == 9);
 	_it_should("remember the number of neurons", layer.n_neurons == 9);
 	_it_should("start every weight at zero", layer.weights[3][4] == 0.0);
 	_it_should("start every bias at zero", layer.biases[3] == 0.0);
 
-	_it_should("reject more inputs than fit", !layer_init(&layer, LAYER_MAX_INPUTS + 1, 1, ACTIVATION_RELU));
-	_it_should("reject more neurons than fit", !layer_init(&layer, 1, LAYER_MAX_NEURONS + 1, ACTIVATION_RELU));
-	_it_should("reject a negative size", !layer_init(&layer, -1, 1, ACTIVATION_RELU));
+	_it_should("reject more inputs than fit", !layer_init(&layer, LAYER_MAX_INPUTS + 1, 1, ACTIVATION_CLAMP));
+	_it_should("reject more neurons than fit", !layer_init(&layer, 1, LAYER_MAX_NEURONS + 1, ACTIVATION_CLAMP));
+	_it_should("reject a negative size", !layer_init(&layer, -1, 1, ACTIVATION_CLAMP));
 
 	return NULL;
 }
@@ -38,7 +38,7 @@ static char *test_layer_forward_one_neuron(void)
 	double inputs[3] = {1.0, 2.0, 3.0};
 	double outputs[1] = {0.0};
 
-	layer_init(&layer, 3, 1, ACTIVATION_RELU);
+	layer_init(&layer, 3, 1, ACTIVATION_CLAMP);
 	layer.weights[0][0] = 1.0;
 	layer.weights[0][1] = 2.0;
 	layer.weights[0][2] = 3.0;
@@ -56,7 +56,7 @@ static char *test_layer_forward_applies_the_activation(void)
 	double inputs[2] = {-1.0, 1.0};
 	double outputs[2] = {0.0, 0.0};
 
-	layer_init(&layer, 2, 2, ACTIVATION_RELU);
+	layer_init(&layer, 2, 2, ACTIVATION_CLAMP);
 
 	layer.weights[0][0] = 1.0;
 	layer.weights[0][1] = 0.0;
@@ -65,7 +65,7 @@ static char *test_layer_forward_applies_the_activation(void)
 
 	layer_forward(&layer, inputs, 2, outputs, 2);
 
-	_it_should("turn a negative sum into zero", nearly_equal(outputs[0], 0.0));
+	_it_should("put a negative sum on the floor", nearly_equal(outputs[0], NEURON_FLOOR));
 	_it_should("leave a positive sum unchanged", nearly_equal(outputs[1], 1.0));
 
 	return NULL;
@@ -77,7 +77,7 @@ static char *test_layer_forward_identity(void)
 	double inputs[9] = {1, 0, 0, 0, 0, 0, 0, 0, 0};
 	double outputs[9] = {0.0};
 
-	layer_init(&layer, 9, 9, ACTIVATION_RELU);
+	layer_init(&layer, 9, 9, ACTIVATION_CLAMP);
 
 	for (int i = 0; i < 9; i++)
 		layer.weights[i][i] = 1.0;
@@ -96,7 +96,7 @@ static char *test_layer_forward_each_neuron_has_its_own_bias(void)
 	double inputs[1] = {0.0};
 	double outputs[2] = {0.0, 0.0};
 
-	layer_init(&layer, 1, 2, ACTIVATION_RELU);
+	layer_init(&layer, 1, 2, ACTIVATION_CLAMP);
 
 	layer.biases[0] = 1.0;
 	layer.biases[1] = 2.0;
@@ -115,7 +115,7 @@ static char *test_layer_forward_null_arguments(void)
 	double inputs[2] = {1.0, 1.0};
 	double outputs[2] = {0.0, 0.0};
 
-	layer_init(&layer, 2, 2, ACTIVATION_RELU);
+	layer_init(&layer, 2, 2, ACTIVATION_CLAMP);
 
 	_it_should("refuse a null layer", !layer_forward(NULL, inputs, 2, outputs, 2));
 	_it_should("refuse null inputs", !layer_forward(&layer, NULL, 2, outputs, 2));
@@ -146,7 +146,7 @@ static char *test_layer_forward_changed_dimensions(void)
 	double inputs[2] = {1.0, 1.0};
 	double outputs[2] = {0.0, 0.0};
 
-	layer_init(&layer, 2, 2, ACTIVATION_RELU);
+	layer_init(&layer, 2, 2, ACTIVATION_CLAMP);
 
 	layer.n_inputs = 1;
 
@@ -163,7 +163,7 @@ static char *test_layer_forward_buffers_too_small(void)
 	double inputs[2] = {1.0, 1.0};
 	double outputs[2] = {0.0, 0.0};
 
-	layer_init(&layer, 2, 2, ACTIVATION_RELU);
+	layer_init(&layer, 2, 2, ACTIVATION_CLAMP);
 
 	_it_should("refuse too few inputs", !layer_forward(&layer, inputs, 1, outputs, 2));
 	_it_should("refuse too few outputs", !layer_forward(&layer, inputs, 2, outputs, 1));
@@ -207,7 +207,7 @@ static char *test_the_activation_is_part_of_the_layer(void)
 
 	/* the layer was set up to answer with a probability, and something
 	 * changed its mind */
-	layer.activation = ACTIVATION_RELU;
+	layer.activation = ACTIVATION_CLAMP;
 
 	_it_should("refuse a layer whose activation was changed",
 		!layer_forward(&layer, inputs, 2, outputs, 2));

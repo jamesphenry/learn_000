@@ -177,66 +177,68 @@ static char *test_input_count_matches_the_board(void)
 	return NULL;
 }
 
-static char *test_relu(void)
+static char *test_clamp(void)
 {
 	_it_should("leave a positive value unchanged",
-		nearly_equal(neuron_relu(3.5), 3.5));
+		nearly_equal(neuron_clamp(3.5), 3.5));
 	_it_should("leave zero at zero",
-		nearly_equal(neuron_relu(0.0), 0.0));
-	_it_should("turn a negative value into zero",
-		nearly_equal(neuron_relu(-2.5), 0.0));
+		nearly_equal(neuron_clamp(0.0), 0.0));
+	_it_should("turn a value below the floor into the floor",
+		nearly_equal(neuron_clamp(-2.5), NEURON_FLOOR));
+	_it_should("leave a value above the floor alone",
+		nearly_equal(neuron_clamp(-0.5), -0.5));
 
 	return NULL;
 }
 
-static char *test_relu_edges(void)
+static char *test_clamp_edges(void)
 {
 	_it_should("leave a large positive value unchanged",
-		nearly_equal(neuron_relu(1000.0), 1000.0));
-	_it_should("turn a small negative value into zero",
-		nearly_equal(neuron_relu(-0.0001), 0.0));
+		nearly_equal(neuron_clamp(1000.0), 1000.0));
+	_it_should("leave a small negative value alone",
+		nearly_equal(neuron_clamp(-0.0001), -0.0001));
 	_it_should("turn negative zero into zero",
-		nearly_equal(neuron_relu(-0.0), 0.0));
+		nearly_equal(neuron_clamp(-0.0), 0.0));
 
 	/* A NaN is compared directly, a tolerance would never match it. */
-	_it_should("turn a NaN value into zero", neuron_relu(NAN) == 0.0);
+	_it_should("turn a NaN value into the floor", neuron_clamp(NAN) == NEURON_FLOOR);
 
 	return NULL;
 }
 
 /* The weighted sum feeds the activation, which is the whole neuron. */
-static char *test_relu_after_the_weighted_sum(void)
+static char *test_clamp_after_the_weighted_sum(void)
 {
 	double inputs[CELL_COUNT] = {0};
 	double weights[CELL_COUNT] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
 
-	/* -1 * 1 = -1, and the activation turns a negative sum into zero */
+	/* -1 * 1 = -1, and the activation puts it on the floor */
 	inputs[0] = -1.0;
-	_it_should("turn a negative sum into zero",
-		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0)), 0.0));
+	_it_should("put a negative sum on the floor",
+		nearly_equal(neuron_clamp(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0)), NEURON_FLOOR));
 
 	/* 0 * 1 = 0, and the activation leaves a sum of zero alone */
 	inputs[0] = 0.0;
 	_it_should("leave a sum of zero at zero",
-		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0)), 0.0));
+		nearly_equal(neuron_clamp(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0)), 0.0));
 
 	/* 1 * 1 = 1, and the activation leaves a positive sum alone */
 	inputs[0] = 1.0;
 	_it_should("leave a positive sum unchanged",
-		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0)), 1.0));
+		nearly_equal(neuron_clamp(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0)), 1.0));
 
 	/* one X and eight O: 1 - 8 = -7, still a negative sum */
 	inputs[0] = 1.0;
 	for (int i = 1; i < CELL_COUNT; i++)
 		inputs[i] = -1.0;
-	_it_should("turn a negative sum of mixed inputs into zero",
-		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0)), 0.0));
+	_it_should("put a negative sum of mixed inputs on the floor",
+		nearly_equal(neuron_clamp(neuron_weighted_sum(inputs, weights, CELL_COUNT, 0.0)), NEURON_FLOOR));
 
 	/* nine X and a bias of -9: 9 - 9 = 0 */
 	for (int i = 0; i < CELL_COUNT; i++)
 		inputs[i] = 1.0;
 	_it_should("leave a sum of zero at zero when the bias cancels the inputs",
-		nearly_equal(neuron_relu(neuron_weighted_sum(inputs, weights, CELL_COUNT, -9.0)), 0.0));
+		nearly_equal(neuron_clamp(neuron_weighted_sum(inputs, weights, CELL_COUNT, -9.0)), 0.0));
 
 	return NULL;
 }
@@ -248,15 +250,15 @@ static char *test_sigmoid(void)
 	_it_should("give nearly zero for a large negative value", neuron_sigmoid(-10.0) < 0.01);
 	_it_should("stay a probability even for a huge value",
 		neuron_sigmoid(-1000.0) >= 0.0 && neuron_sigmoid(1000.0) <= 1.0);
-	_it_should("not be the same as a relu", neuron_sigmoid(-2.5) != neuron_relu(-2.5));
+	_it_should("not be the same as a clamp", neuron_sigmoid(-2.5) != neuron_clamp(-2.5));
 
 	return NULL;
 }
 
 static char *test_activate(void)
 {
-	_it_should("use the relu when asked for it",
-		nearly_equal(neuron_activate(-2.5, ACTIVATION_RELU), 0.0));
+	_it_should("use the clamp when asked for it",
+		nearly_equal(neuron_activate(-2.5, ACTIVATION_CLAMP), NEURON_FLOOR));
 	_it_should("use the sigmoid when asked for it",
 		nearly_equal(neuron_activate(0.0, ACTIVATION_SIGMOID), 0.5));
 
@@ -265,9 +267,10 @@ static char *test_activate(void)
 
 static char *test_derivative(void)
 {
-	_it_should("be one for a positive relu", nearly_equal(neuron_derivative(1.0, ACTIVATION_RELU), 1.0));
-	_it_should("be zero for a negative relu", nearly_equal(neuron_derivative(-1.0, ACTIVATION_RELU), 0.0));
-	_it_should("be zero at zero for a relu", nearly_equal(neuron_derivative(0.0, ACTIVATION_RELU), 0.0));
+	_it_should("be one above the floor", nearly_equal(neuron_derivative(1.0, ACTIVATION_CLAMP), 1.0));
+	_it_should("be zero below the floor", nearly_equal(neuron_derivative(-2.0, ACTIVATION_CLAMP), 0.0));
+	_it_should("be zero at the floor", nearly_equal(neuron_derivative(NEURON_FLOOR, ACTIVATION_CLAMP), 0.0));
+	_it_should("be one just above the floor", nearly_equal(neuron_derivative(-0.5, ACTIVATION_CLAMP), 1.0));
 	_it_should("be a quarter in the middle of a sigmoid",
 		nearly_equal(neuron_derivative(0.0, ACTIVATION_SIGMOID), 0.25));
 
@@ -286,12 +289,12 @@ static char *run_tests()
 	_run_test(test_negative_weights);
 	_run_test(test_fractional_values);
 	_run_test(test_rounding);
-	_run_test(test_relu);
+	_run_test(test_clamp);
 	_run_test(test_sigmoid);
 	_run_test(test_activate);
 	_run_test(test_derivative);
-	_run_test(test_relu_edges);
-	_run_test(test_relu_after_the_weighted_sum);
+	_run_test(test_clamp_edges);
+	_run_test(test_clamp_after_the_weighted_sum);
 	_run_test(test_board_feeds_a_neuron);
 	_run_test(test_input_count_matches_the_board);
 

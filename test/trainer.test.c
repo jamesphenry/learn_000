@@ -26,7 +26,7 @@ static bool nearly_equal(double actual, double expected)
 static void build_the_test_network(network_t *network)
 {
 	network_init(network);
-	network_add_layer(network, CELL_COUNT, 2, ACTIVATION_RELU);
+	network_add_layer(network, CELL_COUNT, 2, ACTIVATION_CLAMP);
 	network_add_layer(network, 2, CELL_COUNT, ACTIVATION_SIGMOID);
 }
 
@@ -83,8 +83,8 @@ static char *test_it_refuses_a_network_that_does_not_answer_with_a_probability(v
 	game_t game;
 
 	network_init(&network);
-	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_RELU);
-	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_RELU);
+	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_CLAMP);
+	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_CLAMP);
 
 	trainer_init(&trainer, &network, 0.1);
 	build_a_won_game(&game);
