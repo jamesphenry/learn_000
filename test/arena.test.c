@@ -294,6 +294,154 @@ static char *test_the_model_that_learned_beats_the_one_that_did_not(void)
 	return NULL;
 }
 
+static char *test_a_survey_runs_the_arena_several_times(void)
+{
+	arena_settings_t settings;
+	arena_survey_t survey;
+
+	build_small_settings(&settings);
+
+	_it_should("run", arena_survey(&settings, 3, &survey));
+	_it_should("keep a report for every run", survey.runs == 3);
+
+	for (int run = 0; run < survey.runs; run++) {
+		for (int scheme = 0; scheme < ARENA_SCHEMES; scheme++) {
+			_it_should("train every model in every run",
+				survey.reports[run].results[scheme].trained_games ==
+				settings.training_games);
+		}
+	}
+
+	return NULL;
+}
+
+static char *test_each_run_has_a_seed_of_its_own(void)
+{
+	arena_settings_t settings;
+	arena_survey_t survey;
+
+	build_small_settings(&settings);
+
+	arena_survey(&settings, 3, &survey);
+
+	for (int run = 1; run < survey.runs; run++)
+		_it_should("use a different seed in every run",
+			survey.reports[run].training_seed !=
+			survey.reports[run - 1].training_seed);
+
+	return NULL;
+}
+
+static char *test_the_survey_counts_the_round_robin(void)
+{
+	arena_settings_t settings;
+	arena_survey_t survey;
+	int expected_won[ARENA_SCHEMES] = { 0, 0, 0 };
+	int expected_lost[ARENA_SCHEMES] = { 0, 0, 0 };
+	int expected_draws[ARENA_SCHEMES] = { 0, 0, 0 };
+	int expected_winners[ARENA_SCHEMES] = { 0, 0, 0 };
+	int winners = 0;
+
+	build_small_settings(&settings);
+	settings.match_games = 10;
+
+	arena_survey(&settings, 3, &survey);
+
+	/* what the reports say, worked out again here */
+	for (int run = 0; run < survey.runs; run++) {
+		arena_report_t *report = &survey.reports[run];
+		int wins[ARENA_SCHEMES] = { 0, 0, 0 };
+		int best = -1;
+
+		for (int scheme = 0; scheme < ARENA_SCHEMES; scheme++)
+			expected_draws[scheme] += report->results[scheme].perfect_after.draws;
+
+		for (int i = 0; i < ARENA_SCHEMES; i++)
+			for (int j = i + 1; j < ARENA_SCHEMES; j++) {
+				wins[i] += report->matches[i][j].first_wins;
+				wins[j] += report->matches[i][j].second_wins;
+
+				expected_won[i] += report->matches[i][j].first_wins;
+				expected_lost[i] += report->matches[i][j].second_wins;
+				expected_won[j] += report->matches[i][j].second_wins;
+				expected_lost[j] += report->matches[i][j].first_wins;
+			}
+
+		/* the model that won the most of the matches won the round robin,
+		 * unless two of them tied */
+		int best_wins = -1;
+		int tied = 0;
+
+		for (int scheme = 0; scheme < ARENA_SCHEMES; scheme++) {
+			if (wins[scheme] > best_wins) {
+				best_wins = wins[scheme];
+				best = scheme;
+				tied = 0;
+			} else if (wins[scheme] == best_wins) {
+				tied = 1;
+			}
+		}
+
+		if (!tied) expected_winners[best]++;
+	}
+
+	for (int scheme = 0; scheme < ARENA_SCHEMES; scheme++) {
+		winners += survey.round_robin_wins[scheme];
+
+		_it_should("count the rounds it won",
+			survey.round_robin_wins[scheme] == expected_winners[scheme]);
+		_it_should("count the games it won",
+			survey.games_won[scheme] == expected_won[scheme]);
+		_it_should("count the games it lost",
+			survey.games_lost[scheme] == expected_lost[scheme]);
+		_it_should("count the draws against the perfect player",
+			survey.perfect_draws[scheme] == expected_draws[scheme]);
+	}
+
+	/* a run has one winner, or none when the models tie */
+	_it_should("count at most one winner for each run", winners <= survey.runs);
+
+	return NULL;
+}
+
+static char *test_the_same_survey_comes_again(void)
+{
+	arena_settings_t settings;
+	arena_survey_t first;
+	arena_survey_t second;
+
+	build_small_settings(&settings);
+
+	arena_survey(&settings, 2, &first);
+	arena_survey(&settings, 2, &second);
+
+	for (int run = 0; run < first.runs; run++) {
+		for (int scheme = 0; scheme < ARENA_SCHEMES; scheme++) {
+			_it_should("give the same truth error",
+				nearly_equal(first.reports[run].results[scheme].truth_after,
+				             second.reports[run].results[scheme].truth_after));
+		}
+	}
+
+	return NULL;
+}
+
+static char *test_a_survey_refuses_bad_arguments(void)
+{
+	arena_settings_t settings;
+	arena_survey_t survey;
+
+	build_small_settings(&settings);
+
+	_it_should("refuse no settings", !arena_survey(NULL, 3, &survey));
+	_it_should("refuse nowhere to put the survey", !arena_survey(&settings, 3, NULL));
+	_it_should("refuse no runs", !arena_survey(&settings, 0, &survey));
+	_it_should("refuse more runs than it holds",
+		!arena_survey(&settings, ARENA_MAX_RUNS + 1, &survey));
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	_run_test(test_the_settings_start_with_sensible_values);
@@ -308,6 +456,11 @@ static char *run_tests()
 	_run_test(test_the_models_play_each_other);
 	_run_test(test_the_same_report_comes_again);
 	_run_test(test_the_model_that_learned_beats_the_one_that_did_not);
+	_run_test(test_a_survey_runs_the_arena_several_times);
+	_run_test(test_each_run_has_a_seed_of_its_own);
+	_run_test(test_the_survey_counts_the_round_robin);
+	_run_test(test_the_same_survey_comes_again);
+	_run_test(test_a_survey_refuses_bad_arguments);
 
 	return NULL;
 }

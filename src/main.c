@@ -314,43 +314,55 @@ static void judge_a_game(void)
 static void run_the_arena(void)
 {
 	arena_settings_t settings;
-	arena_report_t report;
+	arena_survey_t survey;
 	const char *names[3] = { "zero", "random", "maximum" };
+	const int runs = 5;
 
 	arena_settings_init(&settings);
 
 	printf("\nthe training arena\n");
-	printf("  %d games to learn from, %d to measure with, %d between the models\n\n",
-	       settings.training_games, settings.evaluation_games, settings.match_games);
+	printf("  %d games to learn from, %d to measure with, %d between the models,"
+	       " over %d runs with a seed of their own\n\n",
+	       settings.training_games, settings.evaluation_games, settings.match_games,
+	       runs);
 
-	if (!arena_run_all(&settings, &report)) {
+	if (!arena_survey(&settings, runs, &survey)) {
 		printf("  the arena could not be run\n");
 		return;
 	}
 
-	printf("  %-8s %10s %10s   %s\n", "started", "won at random", "out by",
-	       "against the perfect player");
+	printf("  %-4s %-6s %8s %8s %8s   %s\n", "run", "seed", names[0], names[1],
+	       names[2], "the models against each other");
 
-	for (int scheme = 0; scheme < ARENA_SCHEMES; scheme++) {
-		printf("  %-8s %9.1f%% %10.3f   %3d won %3d drawn %3d lost\n",
-		       names[scheme],
-		       report.results[scheme].win_rate_after,
-		       report.results[scheme].truth_after,
-		       report.results[scheme].perfect_after.wins,
-		       report.results[scheme].perfect_after.draws,
-		       report.results[scheme].perfect_after.losses);
+	for (int run = 0; run < survey.runs; run++) {
+		arena_report_t *report = &survey.reports[run];
+		int wins[ARENA_SCHEMES] = { 0, 0, 0 };
+
+		for (int i = 0; i < ARENA_SCHEMES; i++)
+			for (int j = i + 1; j < ARENA_SCHEMES; j++) {
+				wins[i] += report->matches[i][j].first_wins;
+				wins[j] += report->matches[i][j].second_wins;
+			}
+
+		printf("  %-4d %-6llu", run + 1, report->training_seed);
+		for (int i = 0; i < ARENA_SCHEMES; i++)
+			printf(" %8.3f", report->results[i].truth_after);
+
+		printf("   ");
+		for (int i = 0; i < ARENA_SCHEMES; i++)
+			printf("%s %d  ", names[i], wins[i]);
+		printf("\n");
 	}
 
-	printf("\n  the models against each other\n");
+	printf("\n  over all %d runs\n", survey.runs);
 
-	for (int first = 0; first < ARENA_SCHEMES; first++) {
-		for (int second = first + 1; second < ARENA_SCHEMES; second++) {
-			printf("  %-8s against %-8s: %3d won, %3d drawn, %3d lost\n",
-			       names[first], names[second],
-			       report.matches[first][second].first_wins,
-			       report.matches[first][second].draws,
-			       report.matches[first][second].second_wins);
-		}
+	for (int scheme = 0; scheme < ARENA_SCHEMES; scheme++) {
+		printf("  %-8s won the round robin %d times out of %d;  it won %d and"
+		       " lost %d games against the other models;  against the perfect"
+		       " player it drew %d and lost %d\n",
+		       names[scheme], survey.round_robin_wins[scheme], survey.runs,
+		       survey.games_won[scheme], survey.games_lost[scheme],
+		       survey.perfect_draws[scheme], survey.perfect_losses[scheme]);
 	}
 }
 

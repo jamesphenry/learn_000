@@ -178,6 +178,7 @@ bool arena_run_all(const arena_settings_t *settings, arena_report_t *report)
 	if (settings->hidden_neurons < 1) return false;
 
 	memset(report, 0, sizeof(*report));
+	report->training_seed = settings->training_seed;
 
 	rng_seed(&rng, settings->training_seed);
 
@@ -197,6 +198,96 @@ bool arena_run_all(const arena_settings_t *settings, arena_report_t *report)
 			                      settings->evaluation_seed, settings->match_games,
 			                      0.0, &report->matches[first][second]))
 				return false;
+		}
+	}
+
+	return true;
+}
+
+/*
+ * The model that won the most of the matches in a run: the one that came
+ * out on top of the round robin. -1 when the models tied.
+ */
+static int arena_winner_of_the_round_robin(const arena_report_t *report)
+{
+	int best = -1;
+	int best_wins = -1;
+	int tied = 0;
+
+	for (int scheme = 0; scheme < ARENA_SCHEMES; scheme++) {
+		int wins = 0;
+
+		for (int other = 0; other < ARENA_SCHEMES; other++) {
+			if (other == scheme) continue;
+
+			if (scheme < other)
+				wins += report->matches[scheme][other].first_wins;
+			else
+				wins += report->matches[other][scheme].second_wins;
+		}
+
+		if (wins > best_wins) {
+			best_wins = wins;
+			best = scheme;
+			tied = 0;
+		} else if (wins == best_wins) {
+			tied = 1;
+		}
+	}
+
+	return tied ? -1 : best;
+}
+
+bool arena_survey(const arena_settings_t *settings, int runs, arena_survey_t *survey)
+{
+	if (settings == NULL || survey == NULL) return false;
+	if (runs < 1 || runs > ARENA_MAX_RUNS) return false;
+
+	memset(survey, 0, sizeof(*survey));
+
+	for (int run = 0; run < runs; run++) {
+		arena_settings_t one = *settings;
+		int winner;
+
+		/* each run has a seed of its own, so the models are started off
+		 * differently and learn from different games */
+		one.training_seed = settings->training_seed + (unsigned long long)run;
+
+		if (!arena_run_all(&one, &survey->reports[run])) return false;
+
+		survey->runs++;
+
+		winner = arena_winner_of_the_round_robin(&survey->reports[run]);
+
+		if (winner >= 0) survey->round_robin_wins[winner]++;
+
+		for (int scheme = 0; scheme < ARENA_SCHEMES; scheme++) {
+			int other;
+
+			/* how the model did against the perfect player */
+			survey->perfect_draws[scheme] +=
+				survey->reports[run].results[scheme].perfect_after.draws;
+			survey->perfect_losses[scheme] +=
+				survey->reports[run].results[scheme].perfect_after.losses;
+
+			/* and how many of the round robin it lost */
+			for (other = 0; other < ARENA_SCHEMES; other++) {
+				int lost;
+
+				if (other == scheme) continue;
+
+				if (scheme < other) {
+					lost = survey->reports[run].matches[scheme][other].second_wins;
+					survey->games_won[scheme] +=
+						survey->reports[run].matches[scheme][other].first_wins;
+				} else {
+					lost = survey->reports[run].matches[other][scheme].first_wins;
+					survey->games_won[scheme] +=
+						survey->reports[run].matches[other][scheme].second_wins;
+				}
+
+				survey->games_lost[scheme] += lost;
+			}
 		}
 	}
 

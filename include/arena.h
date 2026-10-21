@@ -59,6 +59,9 @@ typedef struct {
  * What all the models did, and how they fare against each other.
  */
 typedef struct {
+	/* the seed the models were trained with */
+	unsigned long long training_seed;
+
 	/* what each model did on its own, in the order of the ways of
 	 * starting off */
 	arena_result_t results[ARENA_SCHEMES];
@@ -68,6 +71,32 @@ typedef struct {
 	 * upper half is filled in: a model does not play itself. */
 	match_result_t matches[ARENA_SCHEMES][ARENA_SCHEMES];
 } arena_report_t;
+
+/* How many runs a survey holds. */
+#define ARENA_MAX_RUNS 10
+
+/*
+ * What the models did over a number of runs, each with its own seed.
+ */
+typedef struct {
+	int runs;
+
+	/* what each run found */
+	arena_report_t reports[ARENA_MAX_RUNS];
+
+	/* how many of the runs each model won the round robin in */
+	int round_robin_wins[ARENA_SCHEMES];
+
+	/* and the games it won and lost against the other models, over all the
+	 * runs */
+	int games_won[ARENA_SCHEMES];
+	int games_lost[ARENA_SCHEMES];
+
+	/* and the games each model drew and lost against the perfect player,
+	 * over all the runs */
+	int perfect_draws[ARENA_SCHEMES];
+	int perfect_losses[ARENA_SCHEMES];
+} arena_survey_t;
 
 /* The conditions a run is given, with sensible values for tic-tac-toe. */
 void arena_settings_init(arena_settings_t *settings);
@@ -85,5 +114,12 @@ bool arena_run(const arena_settings_t *settings, init_scheme_t scheme,
  * them, and then has them play each other.
  */
 bool arena_run_all(const arena_settings_t *settings, arena_report_t *report);
+
+/*
+ * Runs the arena several times, each time with a seed of its own, and says
+ * what the models did over all of them. A ranking that holds from one seed
+ * to the next is worth more than one that was measured once.
+ */
+bool arena_survey(const arena_settings_t *settings, int runs, arena_survey_t *survey);
 
 #endif // ARENA_H
