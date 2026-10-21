@@ -10,17 +10,6 @@
  * the policy plays at random. */
 #define RANDOM_TEMPERATURE INFINITY
 
-/* The probability the network gives for each cell. */
-static bool score_position(const network_t *network, const board_t *board,
-                           double scores[CELL_COUNT])
-{
-	double inputs[CELL_COUNT];
-
-	board_to_inputs(board, inputs);
-
-	return network_forward(network, inputs, CELL_COUNT, scores, CELL_COUNT);
-}
-
 bool evaluate_against(const network_t *first, const network_t *second,
                       unsigned long long seed, int games, double temperature,
                       match_result_t *result)
@@ -52,6 +41,8 @@ bool evaluate_against(const network_t *first, const network_t *second,
 		else
 			outcome = game_play(&game, &second_policy, &first_policy);
 
+		if (first_is_x) result->first_as_x++;
+
 		/* and the referee looks over it */
 		if (!judge_game(&game, &verdict)) {
 			flagged++;
@@ -59,7 +50,11 @@ bool evaluate_against(const network_t *first, const network_t *second,
 		}
 
 		if (outcome == GAME_DRAW) draws++;
-		else if ((outcome == GAME_X_WINS) == first_is_x) first_wins++;
+		else if ((outcome == GAME_X_WINS) == first_is_x) {
+			first_wins++;
+
+			if (first_is_x) result->first_wins_as_x++;
+		}
 		else second_wins++;
 	}
 
@@ -184,15 +179,22 @@ bool evaluate_against_perfect(const network_t *network, unsigned long long seed,
 			}
 
 			place_mark(&board, move, board.current_player);
+			board.current_player = (board.current_player == 'X') ? 'O' : 'X';
 		}
 
 		winner = detect_win(&board, 'X') ? 'X' :
 		         detect_win(&board, 'O') ? 'O' : 0;
 
+		if (network_is_x) result->as_x++;
+		else result->as_o++;
+
 		if (winner == 0) {
 			draws++;
 		} else if (winner == (network_is_x ? 'X' : 'O')) {
 			wins++;
+
+			if (network_is_x) result->wins_as_x++;
+			else result->wins_as_o++;
 		} else {
 			losses++;
 		}
@@ -206,6 +208,15 @@ bool evaluate_against_perfect(const network_t *network, unsigned long long seed,
 	return true;
 }
 
+/* The result of a game, on the same scale as the worth of a position. */
+static double worth_of_result(game_result_t outcome)
+{
+	if (outcome == GAME_X_WINS) return 1.0;
+	if (outcome == GAME_O_WINS) return 0.0;
+
+	return 0.5;
+}
+
 bool evaluate_network(const network_t *network, unsigned long long seed, int games,
                       evaluation_t *result)
 {
@@ -213,7 +224,6 @@ bool evaluate_network(const network_t *network, unsigned long long seed, int gam
 	policy_t random_policy;
 	game_t game;
 	board_t positions[CELL_COUNT];
-	double scores[CELL_COUNT];
 	double total = 0.0;
 	double truth_total = 0.0;
 	int moves = 0;
@@ -257,36 +267,36 @@ bool evaluate_network(const network_t *network, unsigned long long seed, int gam
 
 		if (outcome == GAME_X_WINS) result->x_wins++;
 
-		/* and the probabilities it gave for the moves that were played */
+		/* and the worth it gave for the positions it was in */
 		game_positions(&game, positions);
 
 		for (int step = 0; step < game.moves; step++) {
-			double probability;
+			double worth;
 			double actual;
 			int bucket;
 
-			if (!score_position(network, &positions[step], scores)) continue;
+			if (!policy_position_worth(network, &positions[step], &worth)) continue;
 
-			probability = scores[game.history[step]];
-			actual = (outcome == GAME_X_WINS) ? 1.0 : 0.0;
+			actual = worth_of_result(outcome);
 
-			bucket = (int)(probability * EVALUATION_BUCKETS);
+			bucket = (int)(worth * EVALUATION_BUCKETS);
 			if (bucket < 0) bucket = 0;
 			if (bucket >= EVALUATION_BUCKETS) bucket = EVALUATION_BUCKETS - 1;
 
 			result->bucket_counts[bucket]++;
-			result->bucket_predicted[bucket] += probability;
+			result->bucket_predicted[bucket] += worth;
 			result->bucket_observed[bucket] += actual;
 
-			total += (probability - actual) * (probability - actual);
+			total += (worth - actual) * (worth - actual);
 			moves++;
 			result->moves++;
 
-			/* and how far the probability is from what the perfect
-			 * player knows the position to be worth */
-			truth_total += fabs(probability - minimax_x_win_chance(&positions[step]));
+			/* and how far it is from what the perfect player knows the
+			 * position to be worth */
+			truth_total += fabs(worth - minimax_x_win_chance(&positions[step]));
 
 			if (outcome == GAME_X_WINS) result->moves_in_x_wins++;
+			if (outcome == GAME_DRAW) result->moves_in_draws++;
 		}
 	}
 

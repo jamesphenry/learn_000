@@ -3,7 +3,7 @@
 #include <time.h>
 #include "test-runner.h"
 #include <stdbool.h>
-#include <string.h>
+#include <math.h>
 
 #include "../src/board.c"
 #include "../src/game.c"
@@ -21,13 +21,13 @@ static bool nearly_equal(double actual, double expected)
 	return diff < 1e-9;
 }
 
-/* A network whose output is a probability, so every cell answers with the
- * chance that X wins if that move is played. */
+/* A network whose output is a probability, so it answers with the worth of
+ * a position. */
 static void build_the_test_network(network_t *network)
 {
 	network_init(network);
 	network_add_layer(network, CELL_COUNT, 2, ACTIVATION_CLAMP);
-	network_add_layer(network, 2, CELL_COUNT, ACTIVATION_SIGMOID);
+	network_add_layer(network, 2, 1, ACTIVATION_SIGMOID);
 }
 
 /* X takes the top row and wins. */
@@ -53,18 +53,34 @@ static void build_a_lost_game(game_t *game)
 	game_play_move(game, CELL_MIDDLE_RIGHT);
 }
 
-/* The score of the top left cell, with X to move and nothing on the board. */
-static double score_of_the_first_cell(const network_t *network)
+/* A game that is drawn: neither player gets a line. */
+static void build_a_drawn_game(game_t *game)
+{
+	game_init(game);
+	game_play_move(game, CELL_TOP_LEFT);
+	game_play_move(game, CELL_TOP);
+	game_play_move(game, CELL_TOP_RIGHT);
+	game_play_move(game, CELL_CENTER);
+	game_play_move(game, CELL_MIDDLE_LEFT);
+	game_play_move(game, CELL_MIDDLE_RIGHT);
+	game_play_move(game, CELL_BOTTOM);
+	game_play_move(game, CELL_BOTTOM_LEFT);
+	game_play_move(game, CELL_BOTTOM_RIGHT);
+}
+
+/* The worth of the empty board, which is the position the first move was
+ * made in. */
+static double worth_of_the_empty_board(const network_t *network)
 {
 	board_t board;
 	double inputs[CELL_COUNT];
-	double scores[CELL_COUNT];
+	double worth;
 
 	board_init(&board);
 	board_to_inputs(&board, inputs);
-	network_forward(network, inputs, CELL_COUNT, scores, CELL_COUNT);
+	network_forward(network, inputs, CELL_COUNT, &worth, 1);
 
-	return scores[CELL_TOP_LEFT];
+	return worth;
 }
 
 static char *test_it_refuses_a_null_network(void)
@@ -80,22 +96,25 @@ static char *test_it_refuses_a_network_that_does_not_answer_with_a_probability(v
 {
 	network_t network;
 	trainer_t trainer;
-	game_t game;
 
 	network_init(&network);
 	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_CLAMP);
-	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_CLAMP);
-
-	trainer_init(&trainer, &network, 0.1);
-	build_a_won_game(&game);
+	network_add_layer(&network, 2, 1, ACTIVATION_CLAMP);
 
 	_it_should("refuse a network whose output is not a probability",
-		!trainer_train_game(&trainer, &game));
+		!trainer_init(&trainer, &network, 0.1));
+
+	network_init(&network);
+	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_CLAMP);
+	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_SIGMOID);
+
+	_it_should("refuse a network that answers with nine numbers",
+		!trainer_init(&trainer, &network, 0.1));
 
 	return NULL;
 }
 
-static char *test_a_win_raises_the_score_of_the_move_that_won(void)
+static char *test_a_win_raises_the_worth_of_the_position(void)
 {
 	network_t network;
 	trainer_t trainer;
@@ -107,19 +126,19 @@ static char *test_a_win_raises_the_score_of_the_move_that_won(void)
 	trainer_init(&trainer, &network, 0.1);
 	build_a_won_game(&game);
 
-	before = score_of_the_first_cell(&network);
+	before = worth_of_the_empty_board(&network);
 	_it_should("start at a half", nearly_equal(before, 0.5));
 
 	trainer_train_game(&trainer, &game);
 
-	after = score_of_the_first_cell(&network);
-	_it_should("raise the score of the move that won", after > before);
+	after = worth_of_the_empty_board(&network);
+	_it_should("raise the worth of the position", after > before);
 	_it_should("raise it towards one", after < 1.0);
 
 	return NULL;
 }
 
-static char *test_a_loss_lowers_the_score_of_the_move_that_lost(void)
+static char *test_a_loss_lowers_the_worth_of_the_position(void)
 {
 	network_t network;
 	trainer_t trainer;
@@ -131,35 +150,69 @@ static char *test_a_loss_lowers_the_score_of_the_move_that_lost(void)
 	trainer_init(&trainer, &network, 0.1);
 	build_a_lost_game(&game);
 
-	before = score_of_the_first_cell(&network);
+	before = worth_of_the_empty_board(&network);
 
 	trainer_train_game(&trainer, &game);
 
-	after = score_of_the_first_cell(&network);
-	_it_should("lower the score of the move that lost", after < before);
+	after = worth_of_the_empty_board(&network);
+	_it_should("lower the worth of the position", after < before);
 	_it_should("lower it towards zero", after > 0.0);
 
 	return NULL;
 }
 
-static char *test_it_leaves_the_other_moves_alone(void)
+static char *test_a_draw_leaves_the_worth_where_it_was(void)
 {
 	network_t network;
 	trainer_t trainer;
 	game_t game;
+	double before;
+	double after;
 
 	build_the_test_network(&network);
+
+	/* the network starts off saying the position is worth nothing, so the
+	 * target of a drawn game has something to pull it towards */
+	network.layers[1].biases[0] = -5.0;
+
 	trainer_init(&trainer, &network, 0.1);
-	build_a_won_game(&game);
+	build_a_drawn_game(&game);
+
+	before = worth_of_the_empty_board(&network);
 
 	trainer_train_game(&trainer, &game);
 
-	/* only the neurons for the moves that were played are wrong, so the
-	 * others are untouched. The bottom right was never played. */
-	_it_should("leave the moves that were not played alone",
-		network.layers[1].biases[CELL_BOTTOM_RIGHT] == 0.0);
-	_it_should("move the bias that was played",
-		network.layers[1].biases[CELL_TOP_LEFT] != 0.0);
+	after = worth_of_the_empty_board(&network);
+	_it_should("pull the worth towards a half", after > before);
+	_it_should("not go past a half", after < 0.5);
+
+	return NULL;
+}
+
+static char *test_it_learns_a_position_towards_a_target(void)
+{
+	network_t network;
+	trainer_t trainer;
+	board_t board;
+	double before;
+	double after;
+
+	build_the_test_network(&network);
+	trainer_init(&trainer, &network, 0.1);
+	board_init(&board);
+
+	before = worth_of_the_empty_board(&network);
+
+	trainer_train_position(&trainer, &board, 1.0);
+
+	after = worth_of_the_empty_board(&network);
+	_it_should("raise the worth towards the target", after > before);
+	_it_should("not go past it", after < 1.0);
+
+	trainer_train_position(&trainer, &board, 0.0);
+
+	_it_should("lower the worth towards the other target",
+		worth_of_the_empty_board(&network) < after);
 
 	return NULL;
 }
@@ -183,7 +236,7 @@ static char *test_a_network_with_no_weights_cannot_learn_anything_else(void)
 	trainer_train_game(&trainer, &game);
 
 	_it_should("leave the hidden layer dead", network.layers[0].weights[0][0] == 0.0);
-	_it_should("still move the output bias", network.layers[1].biases[CELL_TOP_LEFT] != 0.0);
+	_it_should("still move the output bias", network.layers[1].biases[0] != 0.0);
 
 	return NULL;
 }
@@ -202,7 +255,7 @@ static char *test_the_error_reaches_the_hidden_layer(void)
 	 * cell X took first, so it is awake by the time the top middle is
 	 * played. */
 	network.layers[0].weights[0][0] = 1.0;
-	network.layers[1].weights[CELL_TOP][0] = 1.0;
+	network.layers[1].weights[0][0] = 1.0;
 
 	trainer_init(&trainer, &network, 0.1);
 	build_a_won_game(&game);
@@ -210,8 +263,7 @@ static char *test_the_error_reaches_the_hidden_layer(void)
 	trainer_train_game(&trainer, &game);
 
 	_it_should("change the hidden layer", network.layers[0].weights[0][0] != 1.0);
-	_it_should("move the weight that was played",
-		network.layers[1].weights[CELL_TOP][0] != 1.0);
+	_it_should("move the weight of the output", network.layers[1].weights[0][0] != 1.0);
 
 	return NULL;
 }
@@ -230,8 +282,7 @@ static char *test_it_plays_and_learns(void)
 	played = trainer_run(&trainer, &policy, 10);
 
 	_it_should("play every game", played == 10);
-	_it_should("have changed the network",
-		network.layers[1].biases[CELL_TOP_LEFT] != 0.0);
+	_it_should("have changed the network", network.layers[1].biases[0] != 0.0);
 
 	return NULL;
 }
@@ -248,20 +299,21 @@ static char *test_it_learns_from_the_position_the_move_was_made_in(void)
 
 	build_the_test_network(&network);
 
-	/* the hidden neuron reads the top left cell, and the output for the top
-	 * left cell reads the hidden value */
-	network.layers[0].weights[0][0] = 1.0;
-	network.layers[1].weights[CELL_TOP_LEFT][0] = 1.0;
+	/* the hidden neuron reads the top right cell, which is the last cell
+	 * to be played, and the output reads the hidden value */
+	network.layers[0].weights[0][CELL_TOP_RIGHT] = 1.0;
+	network.layers[1].weights[0][0] = 1.0;
 
 	trainer_init(&trainer, &network, 0.1);
 	build_a_won_game(&game);
 
 	trainer_train_game(&trainer, &game);
 
-	/* the top left was played on an empty board, where the hidden value is
-	 * zero, so the weight of that output cannot move */
-	_it_should("not learn from a later position",
-		network.layers[1].weights[CELL_TOP_LEFT][0] == 1.0);
+	/* the top right was empty in every position the trainer saw, because
+	 * the position after the last move is not one it learns from */
+	_it_should("not learn from a position that was never played",
+		network.layers[0].weights[0][CELL_TOP_RIGHT] == 1.0);
+	_it_should("still learn something", network.layers[1].biases[0] != 0.0);
 
 	return NULL;
 }
@@ -279,10 +331,10 @@ static char *test_the_activation_stops_the_error(void)
 	build_the_test_network(&network);
 
 	/* the hidden neuron reads the top left cell with a weight of its own, so
-	 * that its sum is negative and it is switched off, and the output for
-	 * the centre reads the hidden value */
-	network.layers[0].weights[0][0] = -1.0;
-	network.layers[1].weights[CELL_CENTER][0] = 1.0;
+	 * that its sum is well below the floor and it is switched off, and the
+	 * output reads the hidden value */
+	network.layers[0].weights[0][0] = -5.0;
+	network.layers[1].weights[0][0] = 1.0;
 
 	trainer_init(&trainer, &network, 0.1);
 	build_a_won_game(&game);
@@ -290,7 +342,7 @@ static char *test_the_activation_stops_the_error(void)
 	trainer_train_game(&trainer, &game);
 
 	_it_should("not change a hidden neuron that is switched off",
-		network.layers[0].weights[0][0] == -1.0);
+		network.layers[0].weights[0][0] == -5.0);
 
 	return NULL;
 }
@@ -299,9 +351,10 @@ static char *run_tests()
 {
 	_run_test(test_it_refuses_a_null_network);
 	_run_test(test_it_refuses_a_network_that_does_not_answer_with_a_probability);
-	_run_test(test_a_win_raises_the_score_of_the_move_that_won);
-	_run_test(test_a_loss_lowers_the_score_of_the_move_that_lost);
-	_run_test(test_it_leaves_the_other_moves_alone);
+	_run_test(test_a_win_raises_the_worth_of_the_position);
+	_run_test(test_a_loss_lowers_the_worth_of_the_position);
+	_run_test(test_a_draw_leaves_the_worth_where_it_was);
+	_run_test(test_it_learns_a_position_towards_a_target);
 	_run_test(test_a_network_with_no_weights_cannot_learn_anything_else);
 	_run_test(test_the_error_reaches_the_hidden_layer);
 	_run_test(test_the_activation_stops_the_error);

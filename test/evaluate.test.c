@@ -23,12 +23,12 @@ static bool nearly_equal(double actual, double expected)
 	return diff < 1e-9;
 }
 
-/* A network that has never been trained says a half for every cell. */
+/* A network that has never been trained says a half for every position. */
 static void build_the_test_network(network_t *network)
 {
 	network_init(network);
-	network_add_layer(network, CELL_COUNT, 2, ACTIVATION_CLAMP);
-	network_add_layer(network, 2, CELL_COUNT, ACTIVATION_SIGMOID);
+	network_add_layer(network, CELL_COUNT, 2, ACTIVATION_RELU);
+	network_add_layer(network, 2, 1, ACTIVATION_SIGMOID);
 }
 
 static char *test_it_refuses_bad_arguments(void)
@@ -87,14 +87,22 @@ static char *test_an_untrained_network_says_a_half(void)
 	_it_should("put them all in the middle band", result.bucket_counts[2] == moves);
 	_it_should("say a half for all of them", nearly_equal(result.bucket_predicted[2], 0.5));
 
-	/* the network answers with the chance that X wins, so the share of
-	 * moves where X won is what its probabilities are measured against */
-	_it_should("measure against the moves in the games X won",
-		nearly_equal(result.bucket_observed[2],
-		             (double)result.moves_in_x_wins / result.moves));
+	/* the network answers with the worth of a position, which is one if X
+	 * wins it, a half if it is drawn and nought if O wins it, so the share
+	 * of the moves that ended that way is what it is measured against */
+	double expected = (double)result.moves_in_x_wins / result.moves +
+	                  0.5 * result.moves_in_draws / result.moves;
 
-	/* a half against a result of one or zero is a quarter out, every time */
-	_it_should("be a quarter out", nearly_equal(result.brier_score, 0.25));
+	_it_should("measure against the moves in the games X won",
+		nearly_equal(result.bucket_observed[2], expected));
+
+	/* a half against a result of one or zero is a quarter out, and a half
+	 * against a draw is not out at all */
+	int lost = result.moves - result.moves_in_x_wins - result.moves_in_draws;
+	double expected_brier = 0.25 * (result.moves_in_x_wins + lost) / result.moves;
+
+	_it_should("be a quarter out of every win and every loss",
+		nearly_equal(result.brier_score, expected_brier));
 
 	return NULL;
 }
@@ -143,26 +151,39 @@ static char *test_the_same_seed_gives_the_same_result(void)
 }
 
 /*
+ * A network whose worth is not the same at every position: the more marks
+ * there are on the board, the more it says the position is worth.
+ */
+static void build_the_varying_network(network_t *network)
+{
+	network_init(network);
+	network_add_layer(network, CELL_COUNT, 1, ACTIVATION_CLAMP);
+	network_add_layer(network, 1, 1, ACTIVATION_SIGMOID);
+
+	for (int cell = 0; cell < CELL_COUNT; cell++)
+		network->layers[0].weights[0][cell] = (double)(cell + 1) / 45.0;
+
+	network->layers[1].weights[0][0] = 1.0;
+}
+
+/*
  * The same games played again, and the truth worked out for each position as
  * it was when the move was made, to check the error against.
  */
-static double expected_truth_error(void)
+static double expected_truth_error(network_t *network)
 {
-	network_t network;
 	policy_t network_policy;
 	policy_t random_policy;
 	double total = 0.0;
 	int moves = 0;
-
-	build_the_test_network(&network);
-	policy_init(&network_policy, &network, 1, 0.0);
-	policy_init(&random_policy, &network, 2, INFINITY);
+	policy_init(&network_policy, network, 1, 0.0);
+	policy_init(&random_policy, network, 2, INFINITY);
 
 	for (int i = 0; i < 40; i++) {
 		game_t played;
 		board_t positions[CELL_COUNT];
 		double inputs[CELL_COUNT];
-		double scores[CELL_COUNT];
+		double worth;
 
 		/* the network takes one colour and then the other, as it does in
 		 * the measurement */
@@ -175,10 +196,9 @@ static double expected_truth_error(void)
 
 		for (int step = 0; step < played.moves; step++) {
 			board_to_inputs(&positions[step], inputs);
-			network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+			network_forward(network, inputs, CELL_COUNT, &worth, 1);
 
-			total += fabs(scores[played.history[step]] -
-			              minimax_x_win_chance(&positions[step]));
+			total += fabs(worth - minimax_x_win_chance(&positions[step]));
 			moves++;
 		}
 	}
@@ -202,7 +222,18 @@ static char *test_the_truth_error_is_measured_against_the_perfect_player(void)
 		result.truth_error >= 0.0 && result.truth_error <= 0.5);
 	_it_should("be less than a half", result.truth_error < 0.5);
 	_it_should("be the error against the position as it was",
-		nearly_equal(result.truth_error, expected_truth_error()));
+		nearly_equal(result.truth_error, expected_truth_error(&network)));
+
+	/* the same again with a network that says something different about
+	 * each position, so that measuring the wrong one would show */
+	network_t varying;
+	evaluation_t varying_result;
+
+	build_the_varying_network(&varying);
+	evaluate_network(&varying, 1, 40, &varying_result);
+
+	_it_should("measure the worth of every position",
+		nearly_equal(varying_result.truth_error, expected_truth_error(&varying)));
 
 	return NULL;
 }
@@ -222,14 +253,14 @@ static void build_the_ordered_network(network_t *network)
 
 	network_init(network);
 	network_add_layer(network, CELL_COUNT, 1, ACTIVATION_CLAMP);
-	network_add_layer(network, 1, CELL_COUNT, ACTIVATION_SIGMOID);
+	network_add_layer(network, 1, 1, ACTIVATION_SIGMOID);
 
-	/* the hidden value is always one */
-	network->layers[0].biases[0] = 1.0;
-
-	/* and the cell played first gets the highest score */
+	/* the cell with the highest weight leaves the best position */
 	for (int place = 0; place < CELL_COUNT; place++)
-		network->layers[1].weights[order[place]][0] = (double)(CELL_COUNT - place);
+		network->layers[0].weights[0][order[place]] =
+			(double)(CELL_COUNT - place) / 45.0;
+
+	network->layers[1].weights[0][0] = 1.0;
 }
 
 static char *test_the_skill_measurement_refuses_bad_arguments(void)
@@ -255,9 +286,9 @@ static char *test_the_skill_measurement_counts_the_moves(void)
 
 	evaluate_skill(&network, 1, 10, &skill);
 
-	/* the game is over after five moves, and it is the same game every
-	 * time, so ten games are fifty moves */
-	_it_should("count every move that was played", skill.moves == 50);
+	/* the game is over after seven moves, and it is the same game every
+	 * time, so ten games are seventy moves */
+	_it_should("count every move that was played", skill.moves == 70);
 	_it_should("count every move once", skill.kept + skill.gave_away == skill.moves);
 	_it_should("never throw more wins away than it gave away",
 		skill.threw_wins <= skill.gave_away);
@@ -274,24 +305,28 @@ static char *test_the_skill_measurement_says_what_was_given_away(void)
 
 	evaluate_skill(&network, 1, 10, &skill);
 
-	/* the five moves of the game, and what each one gave away:
+	/* the seven moves of the game, and what each one gave away:
 	 *
 	 *   X plays 0, from a position worth nothing, and it is still worth
 	 *     nothing: nothing given away
-	 *   O plays 8, from a position worth nothing, and now X is winning:
+	 *   O plays 1, from a position worth nothing, and now X is winning:
 	 *     one given away
-	 *   X plays 1, from a position worth a win, and now X is losing:
-	 *     two given away, and it was a win that was thrown away
-	 *   O plays 7, from a position worth a win for X, and now X is losing:
-	 *     two given away, and it was a win that was thrown away
-	 *   X plays 2, from a position worth a win, and it is still a win:
+	 *   X plays 2, from a position worth a win, and it is now a draw:
+	 *     one given away, and it was a win that was thrown away
+	 *   O plays 3, from a position worth nothing, and now X is winning:
+	 *     one given away
+	 *   X plays 4, from a position worth a win, and it is still a win:
+	 *     nothing given away
+	 *   O plays 5, from a position worth a loss, and it is still a loss:
+	 *     nothing given away
+	 *   X plays 6, from a position worth a win, and it is still a win:
 	 *     nothing given away
 	 */
-	_it_should("keep the value twice in each game", skill.kept == 20);
+	_it_should("keep the value four times in each game", skill.kept == 40);
 	_it_should("give value away three times in each game", skill.gave_away == 30);
-	_it_should("throw two wins away in each game", skill.threw_wins == 20);
-	_it_should("give five points of value away in each game",
-		nearly_equal(skill.value_lost, 50.0));
+	_it_should("throw one win away in each game", skill.threw_wins == 10);
+	_it_should("give three points of value away in each game",
+		nearly_equal(skill.value_lost, 30.0));
 
 	return NULL;
 }
@@ -309,12 +344,15 @@ static char *test_the_games_against_the_perfect_player(void)
 	_it_should("count every game once",
 		result.wins + result.draws + result.losses == 10);
 
-	/* the network takes X in five of the games and O in five, and it wins
-	 * as X because it takes the top row, and it loses as O for the same
-	 * reason */
-	_it_should("win as X", result.wins == 5);
-	_it_should("lose as O", result.losses == 5);
+	/* the network takes X in five of the games and O in five, and it
+	 * plays the same cells whatever the opponent does, so the perfect
+	 * player beats it every time */
+	_it_should("lose every game", result.losses == 10);
+	_it_should("win none", result.wins == 0);
 	_it_should("draw none", result.draws == 0);
+	_it_should("take each colour five times",
+		result.as_x == 5 && result.as_o == 5);
+	_it_should("win no game it played as X", result.wins_as_x == 0);
 
 	return NULL;
 }

@@ -30,7 +30,7 @@ static void score_a_game(void)
 	board_t board;
 	network_t network;
 	double inputs[CELL_COUNT];
-	double scores[CELL_COUNT];
+	double worth;
 
 	board_init(&board);
 	place_mark(&board, CELL_TOP_LEFT, 'X');
@@ -44,24 +44,16 @@ static void score_a_game(void)
 	network.layers[0].weights[1][2] = -1.0;
 	network.layers[0].biases[1] = 0.5;
 
-	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_CLAMP);
-	network.layers[1].weights[2][0] = 1.0;
-	network.layers[1].weights[2][1] = -1.0;
+	network_add_layer(&network, 2, 1, ACTIVATION_SIGMOID);
+	network.layers[1].weights[0][0] = 1.0;
+	network.layers[1].weights[0][1] = -1.0;
 
 	board_to_inputs(&board, inputs);
-	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+	network_forward(&network, inputs, CELL_COUNT, &worth, 1);
 
 	print_board(&board);
 
-	printf("scores\n");
-	for (int row = 0; row < BOARD_SIZE; row++) {
-		printf(" %g | %g | %g \n", scores[row * BOARD_SIZE + 0],
-			scores[row * BOARD_SIZE + 1], scores[row * BOARD_SIZE + 2]);
-
-		if (row < 2) {
-			printf("---+---+---\n");
-		}
-	}
+	printf("the position is worth %g to X\n", worth);
 }
 
 /*
@@ -79,21 +71,14 @@ static void build_the_experiment_network(network_t *network)
 	network->layers[0].weights[0][1] = 1.0;
 	network->layers[0].weights[1][2] = 1.0;
 
-	network_add_layer(network, 2, CELL_COUNT, ACTIVATION_CLAMP);
-	for (int cell = 0; cell < CELL_COUNT; cell++) {
-		network->layers[1].weights[cell][0] = (double)(cell + 1);
-		network->layers[1].weights[cell][1] = 1.0;
-	}
+	network_add_layer(network, 2, 1, ACTIVATION_SIGMOID);
+	network->layers[1].weights[0][0] = 4.0;
+	network->layers[1].weights[0][1] = 1.0;
 }
 
-static void print_scores(const char *what, const double *scores)
+static void print_worth(const char *what, double worth)
 {
-	printf("%-38s", what);
-
-	for (int cell = 0; cell < CELL_COUNT; cell++)
-		printf("%6g", scores[cell]);
-
-	printf("\n");
+	printf("%-42s%8g\n", what, worth);
 }
 
 static void run_the_experiments(void)
@@ -101,7 +86,7 @@ static void run_the_experiments(void)
 	network_t network;
 	board_t board;
 	double inputs[CELL_COUNT];
-	double scores[CELL_COUNT];
+	double worth;
 
 	board_init(&board);
 	place_mark(&board, CELL_TOP_LEFT, 'X');
@@ -109,46 +94,41 @@ static void run_the_experiments(void)
 	build_the_experiment_network(&network);
 	board_to_inputs(&board, inputs);
 
-	printf("\n%-38s", "");
-	for (int cell = 0; cell < CELL_COUNT; cell++)
-		printf("%6d", cell);
-	printf("\n");
+	network_forward(&network, inputs, CELL_COUNT, &worth, 1);
+	print_worth("X at the top left and the top middle", worth);
 
-	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
-	print_scores("X at the top left and the top middle", scores);
-
-	network.layers[1].weights[3][0] = 10.0;
-	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
-	print_scores("an output weight of cell 3: 4 to 10", scores);
-	network.layers[1].weights[3][0] = 4.0;
+	network.layers[1].weights[0][0] = 10.0;
+	network_forward(&network, inputs, CELL_COUNT, &worth, 1);
+	print_worth("an output weight: 4 to 10", worth);
+	network.layers[1].weights[0][0] = 4.0;
 
 	network.layers[0].weights[0][1] = 3.0;
-	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
-	print_scores("a hidden weight: 1 to 3", scores);
+	network_forward(&network, inputs, CELL_COUNT, &worth, 1);
+	print_worth("a hidden weight: 1 to 3", worth);
 	network.layers[0].weights[0][1] = 1.0;
 
-	network.layers[1].biases[5] = 3.0;
-	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
-	print_scores("an output bias of cell 5: 0 to 3", scores);
-	network.layers[1].biases[5] = 0.0;
+	network.layers[1].biases[0] = 3.0;
+	network_forward(&network, inputs, CELL_COUNT, &worth, 1);
+	print_worth("an output bias: 0 to 3", worth);
+	network.layers[1].biases[0] = 0.0;
 
 	network.layers[0].biases[0] = 1.0;
-	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
-	print_scores("a hidden bias: 0 to 1", scores);
+	network_forward(&network, inputs, CELL_COUNT, &worth, 1);
+	print_worth("a hidden bias: 0 to 1", worth);
 	network.layers[0].biases[0] = 0.0;
 
 	board_init(&board);
 	place_mark(&board, CELL_TOP_LEFT, 'X');
 	board_to_inputs(&board, inputs);
-	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
-	print_scores("a board with only X at the top left", scores);
+	network_forward(&network, inputs, CELL_COUNT, &worth, 1);
+	print_worth("a board with only X at the top left", worth);
 
 	board_init(&board);
 	place_mark(&board, CELL_TOP_LEFT, 'X');
 	place_mark(&board, CELL_TOP, 'O');
 	board_to_inputs(&board, inputs);
-	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
-	print_scores("a board with X and O on the top row", scores);
+	network_forward(&network, inputs, CELL_COUNT, &worth, 1);
+	print_worth("a board with X and O on the top row", worth);
 }
 
 /*
@@ -170,9 +150,9 @@ static void play_a_game(void)
 	network.layers[0].weights[1][2] = -1.0;
 	network.layers[0].biases[1] = 0.5;
 
-	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_CLAMP);
-	network.layers[1].weights[2][0] = 1.0;
-	network.layers[1].weights[2][1] = -1.0;
+	network_add_layer(&network, 2, 1, ACTIVATION_SIGMOID);
+	network.layers[1].weights[0][0] = 1.0;
+	network.layers[1].weights[0][1] = -1.0;
 
 	policy_init(&policy, &network, 1, 0.1);
 	result = game_play(&game, &policy, &policy);
@@ -196,20 +176,20 @@ static void train_a_network(void)
 	game_t game;
 	board_t board;
 	double inputs[CELL_COUNT];
-	double before[CELL_COUNT];
-	double after[CELL_COUNT];
+	double before;
+	double after;
 
 	network_init(&network);
 	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_CLAMP);
-	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_SIGMOID);
+	network_add_layer(&network, 2, 1, ACTIVATION_SIGMOID);
 
 	/* the hidden layer watches the two cells on the left of the top row */
 	network.layers[0].weights[0][0] = 1.0;
 	network.layers[0].weights[1][1] = 1.0;
 
-	/* and the output for the top right cell reads both of them */
-	network.layers[1].weights[CELL_TOP_RIGHT][0] = 1.0;
-	network.layers[1].weights[CELL_TOP_RIGHT][1] = 1.0;
+	/* and the output reads both of them */
+	network.layers[1].weights[0][0] = 1.0;
+	network.layers[1].weights[0][1] = 1.0;
 
 	trainer_init(&trainer, &network, 0.1);
 
@@ -218,7 +198,7 @@ static void train_a_network(void)
 	place_mark(&board, CELL_TOP_LEFT, 'X');
 	place_mark(&board, CELL_TOP, 'X');
 	board_to_inputs(&board, inputs);
-	network_forward(&network, inputs, CELL_COUNT, before, CELL_COUNT);
+	network_forward(&network, inputs, CELL_COUNT, &before, 1);
 
 	/* a game where X takes the top row and wins */
 	game_init(&game);
@@ -231,10 +211,9 @@ static void train_a_network(void)
 	for (int i = 0; i < 20; i++)
 		trainer_train_game(&trainer, &game);
 
-	network_forward(&network, inputs, CELL_COUNT, after, CELL_COUNT);
+	network_forward(&network, inputs, CELL_COUNT, &after, 1);
 
-	printf("\nthe top right cell was scored %g, and after training %g\n",
-	       before[CELL_TOP_RIGHT], after[CELL_TOP_RIGHT]);
+	printf("\nthe position was worth %g, and after training %g\n", before, after);
 }
 
 static void measure_a_network(void)
@@ -246,8 +225,8 @@ static void measure_a_network(void)
 	evaluation_t after;
 
 	network_init(&network);
-	network_add_layer(&network, CELL_COUNT, 8, ACTIVATION_CLAMP);
-	network_add_layer(&network, 8, CELL_COUNT, ACTIVATION_SIGMOID);
+	network_add_layer(&network, CELL_COUNT, 8, ACTIVATION_RELU);
+	network_add_layer(&network, 8, 1, ACTIVATION_SIGMOID);
 
 	for (int neuron = 0; neuron < network.layers[0].n_neurons; neuron++) {
 		for (int input = 0; input < network.layers[0].n_inputs; input++)
@@ -341,14 +320,16 @@ static void run_the_arena(void)
 	printf("\nthe training arena\n");
 	printf("  %d games to learn from, %d to measure with\n\n",
 	       settings.training_games, settings.evaluation_games);
-	printf("  %-8s %12s %12s   %s\n", "started", "won before", "won after",
+	printf("  %-8s %10s %10s   %s\n", "started", "gave away", "against the",
 	       "out by the truth");
 
 	for (int scheme = 0; scheme < 3; scheme++) {
 		if (!arena_run(&settings, (init_scheme_t)scheme, &result)) continue;
 
-		printf("  %-8s %11.1f%% %11.1f%%   %.3f -> %.3f\n", names[scheme],
-		       result.win_rate_before, result.win_rate_after,
+		printf("  %-8s %10.3f %10s   %.3f -> %.3f\n", names[scheme],
+		       result.value_lost_after,
+		       result.perfect_after.draws == result.perfect_after.games ?
+		         "all drawn" : "lost some",
 		       result.truth_before, result.truth_after);
 	}
 }

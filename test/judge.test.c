@@ -24,8 +24,8 @@ static char *test_a_legal_game_passes(void)
 	network_t network;
 
 	network_init(&network);
-	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_CLAMP);
-	network_add_layer(&network, 2, CELL_COUNT, ACTIVATION_SIGMOID);
+	network_add_layer(&network, CELL_COUNT, 2, ACTIVATION_RELU);
+	network_add_layer(&network, 2, 1, ACTIVATION_SIGMOID);
 
 	policy_init(&x_policy, &network, 1, 0.0);
 	policy_init(&o_policy, &network, 2, 0.0);

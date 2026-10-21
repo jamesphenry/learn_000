@@ -30,9 +30,10 @@ typedef struct {
 	/* the moves that were played, which is how many the probabilities
 	 * were measured over */
 	int moves;
-	/* the moves that were played in the games X won, which is what the
-	 * probabilities are measured against */
+	/* the moves that were played in the games X won and in the games that
+	 * were drawn, which is what the probabilities are measured against */
 	int moves_in_x_wins;
+	int moves_in_draws;
 	/* How far the probabilities were from what happened, over every move
 	 * that was played: the mean of (probability - result) squared. */
 	double brier_score;
@@ -56,6 +57,10 @@ typedef struct {
 	int draws;
 	int second_wins;
 	int flagged;  /* the games the referee did not accept */
+	/* how many of the games the first network played as X, and how many it
+	 * won in them */
+	int first_as_x;
+	int first_wins_as_x;
 } match_result_t;
 
 /*
@@ -83,6 +88,12 @@ typedef struct {
 	int wins;
 	int draws;
 	int losses;
+	/* how many of the games the network took each colour in, and how many
+	 * it won in each */
+	int as_x;
+	int as_o;
+	int wins_as_x;
+	int wins_as_o;
 } perfect_result_t;
 
 /*

@@ -1,10 +1,29 @@
 #include <math.h>
 #include "policy.h"
 
+/*
+ * The worth of a position to X: one if X wins it, a half if it is drawn and
+ * nought if O wins it.
+ */
+bool policy_position_worth(const network_t *network, const board_t *board, double *worth)
+{
+	double inputs[CELL_COUNT];
+
+	if (network == NULL || board == NULL || worth == NULL) return false;
+
+	board_to_inputs(board, inputs);
+
+	return network_forward(network, inputs, CELL_COUNT, worth, 1);
+}
+
 bool policy_init(policy_t *policy, network_t *network, unsigned long long seed,
                  double temperature)
 {
 	if (policy == NULL || network == NULL) return false;
+
+	/* the policy looks ahead, so it needs a network that answers with the
+	 * worth of a position */
+	if (network_output_size(network) != 1) return false;
 
 	policy->network = network;
 	policy->temperature = temperature;
@@ -34,8 +53,7 @@ static int legal_cells(const board_t *board, board_cell_t *cells)
 
 bool policy_select_move(policy_t *policy, const board_t *board, board_cell_t *move)
 {
-	double inputs[CELL_COUNT];
-	double scores[CELL_COUNT];
+	double scores[CELL_COUNT] = { 0.0 };
 	double weights[CELL_COUNT];
 	board_cell_t cells[CELL_COUNT];
 	int count;
@@ -46,12 +64,19 @@ bool policy_select_move(policy_t *policy, const board_t *board, board_cell_t *mo
 	if (policy == NULL || board == NULL || move == NULL) return false;
 	if (policy->network == NULL) return false;
 
-	board_to_inputs(board, inputs);
-	if (!network_forward(policy->network, inputs, CELL_COUNT, scores, CELL_COUNT))
-		return false;
-
 	count = legal_cells(board, cells);
 	if (count == 0) return false;
+
+	/* the worth of the position each cell would leave behind */
+	for (int i = 0; i < count; i++) {
+		board_t next = *board;
+
+		if (!place_mark(&next, cells[i], board->current_player)) return false;
+
+		next.current_player = (board->current_player == 'X') ? 'O' : 'X';
+
+		if (!policy_position_worth(policy->network, &next, &scores[cells[i]])) return false;
+	}
 
 	biggest = preference_of(board, scores[cells[0]]);
 	for (int i = 1; i < count; i++) {

@@ -4,11 +4,9 @@
  * The error signal of one neuron: how much the loss changes if its sum
  * moves. For the output layer with a sigmoid and a cross entropy the
  * derivative of the sigmoid is already folded in, so the error of the
- * neuron that was played is just its output less the target, and the
- * others are left alone.
+ * neuron is just its output less the target.
  */
-static void train_step(trainer_t *trainer, const board_t *board, board_cell_t action,
-                       double target)
+static void train_step(trainer_t *trainer, const board_t *board, double target)
 {
 	network_t *network = trainer->network;
 	int last = network->n_layers - 1;
@@ -36,10 +34,7 @@ static void train_step(trainer_t *trainer, const board_t *board, board_cell_t ac
 		}
 	}
 
-	for (int neuron = 0; neuron < network->layers[last].n_neurons; neuron++)
-		error[last][neuron] = 0.0;
-
-	error[last][action] = outputs[last][action] - target;
+	error[last][0] = outputs[last][0] - target;
 
 	/* and back through the layers */
 	for (int layer = last; layer >= 0; layer--) {
@@ -78,8 +73,24 @@ bool trainer_init(trainer_t *trainer, network_t *network, double learning_rate)
 {
 	if (trainer == NULL || network == NULL) return false;
 
+	/* the loss only makes sense for a network that answers with the worth
+	 * of a position, which is one number and a probability */
+	if (network->n_layers < 1) return false;
+	if (network->layers[network->n_layers - 1].activation != ACTIVATION_SIGMOID) return false;
+	if (network->layers[network->n_layers - 1].n_neurons != 1) return false;
+
 	trainer->network = network;
 	trainer->learning_rate = learning_rate;
+
+	return true;
+}
+
+bool trainer_train_position(trainer_t *trainer, const board_t *board, double target)
+{
+	if (trainer == NULL || board == NULL) return false;
+	if (trainer->network == NULL) return false;
+
+	train_step(trainer, board, target);
 
 	return true;
 }
@@ -89,27 +100,34 @@ bool trainer_train_game(trainer_t *trainer, const game_t *game)
 	network_t *network;
 	board_t positions[CELL_COUNT];
 	double target;
-	int last;
 
 	if (trainer == NULL || game == NULL) return false;
 
 	network = trainer->network;
 	if (network == NULL) return false;
-	if (network->n_layers < 1) return false;
 
-	/* the loss only makes sense for a network that answers with a
-	 * probability */
-	last = network->n_layers - 1;
-	if (network->layers[last].activation != ACTIVATION_SIGMOID) return false;
+	/* the result of the game, on the same scale as the worth of a
+	 * position: one if X won, a half if it was drawn, nought if O won */
+	switch (game_result(game)) {
+	case GAME_X_WINS:
+		target = 1.0;
+		break;
 
-	target = (game_result(game) == GAME_X_WINS) ? 1.0 : 0.0;
+	case GAME_O_WINS:
+		target = 0.0;
+		break;
+
+	default:
+		target = 0.5;
+		break;
+	}
 
 	/* the game is played again from the start, so that every position is
 	 * seen as it was when the move was made */
 	game_positions(game, positions);
 
 	for (int step = 0; step < game->moves; step++)
-		train_step(trainer, &positions[step], game->history[step], target);
+		train_step(trainer, &positions[step], target);
 
 	return true;
 }

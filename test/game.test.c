@@ -12,15 +12,13 @@
 #include "../src/policy.c"
 #include "../src/rng.c"
 
-/* A network that gives one cell a score and leaves the rest at zero. */
-static void build_the_test_network(network_t *network, board_cell_t favourite)
+/* A network that says every position is worth the same, so the policy
+ * breaks every tie at random. */
+static void build_the_test_network(network_t *network)
 {
 	network_init(network);
-	network_add_layer(network, CELL_COUNT, 1, ACTIVATION_CLAMP);
-	network->layers[0].weights[0][0] = 1.0;
-
-	network_add_layer(network, 1, CELL_COUNT, ACTIVATION_CLAMP);
-	network->layers[1].weights[favourite][0] = 1.0;
+	network_add_layer(network, CELL_COUNT, 2, ACTIVATION_RELU);
+	network_add_layer(network, 2, 1, ACTIVATION_SIGMOID);
 }
 
 static char *test_a_game_starts_empty(void)
@@ -118,7 +116,7 @@ static char *test_two_policies_can_play_a_whole_game(void)
 	game_t game;
 	game_result_t result;
 
-	build_the_test_network(&network, CELL_BOTTOM_RIGHT);
+	build_the_test_network(&network);
 	policy_init(&x_policy, &network, 1, 0.0);
 	policy_init(&o_policy, &network, 2, 0.0);
 
@@ -139,7 +137,7 @@ static char *test_a_game_never_goes_on_for_ever(void)
 	game_t game;
 	int moves = 0;
 
-	build_the_test_network(&network, CELL_BOTTOM_RIGHT);
+	build_the_test_network(&network);
 	policy_init(&policy, &network, 3, 1.0);
 
 	game_init(&game);
