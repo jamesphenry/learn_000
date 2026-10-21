@@ -214,21 +214,21 @@ they meet three times.
 | out by the truth | 0.340 | 0.220 |
 | drew with the perfect player | 0 | 100 |
 | lost to the perfect player | 200 | 100 |
-| seed 42 won | 100 | 100 |
+| the games each of them won | 100 | 100 |
 | the games were drawn | 0 | 0 |
 | **after each has learned from its own games** | | |
 | gave away a move | 0.108 | 0.104 |
 | out by the truth | 0.203 | 0.141 |
 | drew with the perfect player | 200 | 200 |
 | lost to the perfect player | 0 | 0 |
-| seed 42 won | 0 | 100 |
+| the games each of them won | 0 | 100 |
 | the games were drawn | 100 | 100 |
 | **after they have learned against each other** | | |
 | gave away a move | 0.162 | 0.123 |
 | out by the truth | 0.231 | 0.189 |
 | drew with the perfect player | 100 | 200 |
 | lost to the perfect player | 100 | 0 |
-| seed 42 won | 19 | 8 |
+| the games each of them won | 19 | 8 |
 | the games were drawn | 173 | 173 |
 
 **A model does learn without being told the answers.** Over fifty thousand
