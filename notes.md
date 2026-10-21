@@ -211,3 +211,14 @@ Collect experience, update models, measure results
 
 One subtle architectural issue to plan for eventually: different games can have different numbers of legal actions. Nine output scores work neatly for tic-tac-toe, but a reusable framework needs a way to map model outputs to a game's available actions. Fixed output counts can still work, but they shouldn't accidentally become a universal assumption.
 
+---
+
+I'd keep your existing tic-tac-toe experiment working and evolve the core in small steps:
+1. Introduce dynamic storage behind the model interface, with clear ownership and cleanup.
+2. Make it easy to create, initialize, evaluate, and destroy multiple independent models.
+3. Keep the game-to-feature conversion separate from the neural network.
+4. Add a second game and use it to test whether the abstractions are genuinely reusable.
+You don't have to decide what every future game's features will look like now. In fact, the second game should help answer that question.
+
+The real goal isn't to build a framework that anticipates every possible game. It's to build one where adding a new game doesn't require rewriting the neural-network machinery.
+
