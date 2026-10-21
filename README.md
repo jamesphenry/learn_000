@@ -86,6 +86,7 @@ learn_000
 │   ├── game.h
 │   ├── layer.h
 │   ├── main.h
+│   ├── minimax.h
 │   ├── network.h
 │   ├── neuron.h
 │   ├── policy.h
@@ -98,6 +99,7 @@ learn_000
 │   ├── game.c
 │   ├── layer.c
 │   ├── main.c
+│   ├── minimax.c
 │   ├── network.c
 │   ├── neuron.c
 │   ├── policy.c
@@ -110,6 +112,7 @@ learn_000
 │   ├── game.test.c
 │   ├── layer.test.c
 │   ├── main.test.c
+│   ├── minimax.test.c
 │   ├── network.test.c
 │   ├── neuron.test.c
 │   ├── policy.test.c

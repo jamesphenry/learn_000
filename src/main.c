@@ -3,6 +3,7 @@
 #include "main.h"
 #include "board.h"
 #include "game.h"
+#include "minimax.h"
 #include "network.h"
 #include "evaluate.h"
 #include "trainer.h"
@@ -274,6 +275,29 @@ static void measure_a_network(void)
 	}
 }
 
+/*
+ * The perfect player, asked about a position the network was also asked
+ * about. The network gave the top right a chance of 0.88; the truth is
+ * that it wins outright.
+ */
+static void ask_the_minimax(void)
+{
+	board_t board;
+	minimax_result_t result;
+
+	board_init(&board);
+	place_mark(&board, CELL_TOP_LEFT, 'X');
+	place_mark(&board, CELL_CENTER, 'O');
+	place_mark(&board, CELL_TOP, 'X');
+	place_mark(&board, CELL_MIDDLE_LEFT, 'O');
+
+	result = minimax_at(&board);
+
+	printf("\nthe same position, seen by the perfect player\n");
+	printf("  it plays cell %d, and the position is worth %d\n", result.move, result.value);
+	printf("  so X wins with a certainty of %g\n", minimax_x_win_chance(&board));
+}
+
 int main(int argc, char *argv[], char *env[]) {
 	UNUSED(argc);
 	UNUSED(argv);
@@ -291,6 +315,9 @@ int main(int argc, char *argv[], char *env[]) {
 
 	printf("\n");
 	measure_a_network();
+
+	printf("\n");
+	ask_the_minimax();
 
 	return EXIT_SUCCESS;
 }
