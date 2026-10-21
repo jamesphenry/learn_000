@@ -130,4 +130,51 @@ bool arena_run_all(const arena_settings_t *settings, arena_report_t *report);
  */
 bool arena_survey(const arena_settings_t *settings, int runs, arena_survey_t *survey);
 
+/* The three stages of a duel. */
+typedef enum {
+	DUEL_BEFORE,    /* before either of them has learned anything */
+	DUEL_OWN_GAMES, /* after each has learned from its own games */
+	DUEL_TOGETHER,  /* after they have learned against each other */
+	ARENA_DUEL_STAGES
+} arena_stage_t;
+
+/* What the two models were like at one stage of a duel. */
+typedef struct {
+	/* the worth each model gave away, on each move it played: the first
+	 * is the one with the first seed */
+	double value_lost[2];
+	/* how far each was from the truth */
+	double truth[2];
+	/* and how each did against the perfect player */
+	int perfect_draws[2];
+	int perfect_losses[2];
+
+	/* and how they fared against each other */
+	match_result_t meeting;
+
+	/* and what each of them looked like when it started off */
+	initialisation_t initialisation[2];
+} arena_stage_result_t;
+
+/*
+ * Two models, each with a seed of its own, and how they fare against each
+ * other: before either of them has learned anything, after each has
+ * learned from its own games, and after they have learned against each
+ * other.
+ *
+ * Neither model is taught by the perfect player here. Each learns from the
+ * result of the games it plays, which is what a model has to do when there
+ * is nobody to tell it the answer.
+ */
+typedef struct {
+	/* what happened at each stage */
+	arena_stage_result_t stages[ARENA_DUEL_STAGES];
+
+	/* the games they played against each other while learning together */
+	match_result_t together_games;
+} arena_duel_t;
+
+bool arena_duel(const arena_settings_t *settings, unsigned long long first_seed,
+                unsigned long long second_seed, arena_duel_t *duel);
+
 #endif // ARENA_H

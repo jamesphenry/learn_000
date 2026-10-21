@@ -442,6 +442,150 @@ static char *test_a_survey_refuses_bad_arguments(void)
 	return NULL;
 }
 
+static char *test_a_duel_is_three_meetings(void)
+{
+	arena_settings_t settings;
+	arena_duel_t duel;
+
+	build_small_settings(&settings);
+	settings.match_games = 20;
+
+	_it_should("run", arena_duel(&settings, 42, 1978, &duel));
+
+	/* and they meet three times */
+	_it_should("meet before either has learned",
+		duel.stages[DUEL_BEFORE].meeting.games == settings.match_games);
+	_it_should("meet after each has learned on its own",
+		duel.stages[DUEL_OWN_GAMES].meeting.games == settings.match_games);
+	_it_should("meet after they have learned together",
+		duel.stages[DUEL_TOGETHER].meeting.games == settings.match_games);
+
+	/* and the games they trained on are counted */
+	_it_should("count the games they trained on",
+		duel.together_games.games == settings.training_games);
+	_it_should("count every one of them once",
+		duel.together_games.first_wins + duel.together_games.draws +
+		duel.together_games.second_wins == settings.training_games);
+
+	/* and what they were like before either of them had learned anything
+	 * is the same as what the arena measures for a model that has never
+	 * seen a game */
+	_it_should("measure the truth the way the arena does",
+		duel.stages[DUEL_BEFORE].truth[0] > 0.2 &&
+		duel.stages[DUEL_BEFORE].truth[0] < 0.4);
+
+	return NULL;
+}
+
+static char *test_the_two_models_of_a_duel_start_off_differently(void)
+{
+	arena_settings_t settings;
+	arena_duel_t duel;
+
+	build_small_settings(&settings);
+
+	arena_duel(&settings, 42, 1978, &duel);
+
+	/* each is started off with its own seed, so they are not the same model */
+	_it_should("start the two models off differently",
+		duel.stages[DUEL_BEFORE].initialisation[0].hidden_lowest !=
+		duel.stages[DUEL_BEFORE].initialisation[1].hidden_lowest ||
+		duel.stages[DUEL_BEFORE].initialisation[0].worth !=
+		duel.stages[DUEL_BEFORE].initialisation[1].worth);
+
+	return NULL;
+}
+
+/*
+ * A model that has never seen a game is measured the same way by the duel
+ * and by the arena, so the two must agree.
+ */
+static char *test_the_duel_measures_a_model_the_way_the_arena_does(void)
+{
+	arena_settings_t settings;
+	arena_duel_t duel;
+	arena_result_t alone;
+
+	build_small_settings(&settings);
+	settings.training_games = 0;
+	settings.training_seed = 42;
+
+	arena_duel(&settings, 42, 42, &duel);
+	arena_run(&settings, INIT_RANDOM, &alone);
+
+	_it_should("measure the truth the same way",
+		nearly_equal(duel.stages[DUEL_BEFORE].truth[0], alone.truth_before));
+	_it_should("measure the worth given away the same way",
+		nearly_equal(duel.stages[DUEL_BEFORE].value_lost[0], alone.value_lost_before));
+
+	return NULL;
+}
+
+static char *test_both_models_learn_from_the_games_they_play_together(void)
+{
+	arena_settings_t settings;
+	arena_duel_t duel;
+
+	build_small_settings(&settings);
+	settings.training_games = 500;
+
+	arena_duel(&settings, 42, 1978, &duel);
+
+	/* the games they play against each other change both of them: each
+	 * ends up worth something different from what it was worth when it had
+	 * only played against itself */
+	_it_should("change the first model",
+		duel.stages[DUEL_TOGETHER].truth[0] !=
+		duel.stages[DUEL_OWN_GAMES].truth[0]);
+	_it_should("change the second model",
+		duel.stages[DUEL_TOGETHER].truth[1] !=
+		duel.stages[DUEL_OWN_GAMES].truth[1]);
+
+	return NULL;
+}
+
+static char *test_the_same_duel_comes_again(void)
+{
+	arena_settings_t settings;
+	arena_duel_t first;
+	arena_duel_t second;
+
+	build_small_settings(&settings);
+	settings.match_games = 20;
+
+	arena_duel(&settings, 42, 1978, &first);
+	arena_duel(&settings, 42, 1978, &second);
+
+	_it_should("give the same first meeting",
+		first.stages[DUEL_BEFORE].meeting.first_wins ==
+		second.stages[DUEL_BEFORE].meeting.first_wins &&
+		first.stages[DUEL_BEFORE].meeting.draws ==
+		second.stages[DUEL_BEFORE].meeting.draws &&
+		first.stages[DUEL_BEFORE].meeting.second_wins ==
+		second.stages[DUEL_BEFORE].meeting.second_wins);
+	_it_should("give the same truth error",
+		nearly_equal(first.stages[DUEL_TOGETHER].truth[0],
+		             second.stages[DUEL_TOGETHER].truth[0]));
+	_it_should("give the same truth error for the second",
+		nearly_equal(first.stages[DUEL_TOGETHER].truth[1],
+		             second.stages[DUEL_TOGETHER].truth[1]));
+
+	return NULL;
+}
+
+static char *test_a_duel_refuses_bad_arguments(void)
+{
+	arena_settings_t settings;
+	arena_duel_t duel;
+
+	build_small_settings(&settings);
+
+	_it_should("refuse no settings", !arena_duel(NULL, 42, 1978, &duel));
+	_it_should("refuse nowhere to put the duel", !arena_duel(&settings, 42, 1978, NULL));
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	_run_test(test_the_settings_start_with_sensible_values);
@@ -461,6 +605,12 @@ static char *run_tests()
 	_run_test(test_the_survey_counts_the_round_robin);
 	_run_test(test_the_same_survey_comes_again);
 	_run_test(test_a_survey_refuses_bad_arguments);
+	_run_test(test_a_duel_is_three_meetings);
+	_run_test(test_the_two_models_of_a_duel_start_off_differently);
+	_run_test(test_the_duel_measures_a_model_the_way_the_arena_does);
+	_run_test(test_both_models_learn_from_the_games_they_play_together);
+	_run_test(test_the_same_duel_comes_again);
+	_run_test(test_a_duel_refuses_bad_arguments);
 
 	return NULL;
 }

@@ -105,6 +105,29 @@ static void arena_measure(const arena_settings_t *settings, const network_t *net
 	                         settings->evaluation_games, &look->perfect);
 }
 
+/* Fills in what a model did, from what it looked like before and after. */
+static void arena_result_of(const arena_look_t *before, const arena_look_t *after,
+                             int trained, arena_result_t *result)
+{
+	result->win_rate_before = 100.0 * before->evaluation.wins / before->evaluation.games;
+	result->win_rate_after = 100.0 * after->evaluation.wins / after->evaluation.games;
+	result->brier_before = before->evaluation.brier_score;
+	result->brier_after = after->evaluation.brier_score;
+	result->truth_before = before->evaluation.truth_error;
+	result->truth_after = after->evaluation.truth_error;
+	result->value_lost_before = before->skill.moves > 0 ?
+		before->skill.value_lost / before->skill.moves : 0.0;
+	result->value_lost_after = after->skill.moves > 0 ?
+		after->skill.value_lost / after->skill.moves : 0.0;
+	result->value_lost_own_before = before->own_skill.moves > 0 ?
+		before->own_skill.value_lost / before->own_skill.moves : 0.0;
+	result->value_lost_own_after = after->own_skill.moves > 0 ?
+		after->own_skill.value_lost / after->own_skill.moves : 0.0;
+	result->perfect_before = before->perfect;
+	result->perfect_after = after->perfect;
+	result->trained_games = trained;
+}
+
 /*
  * Builds one model, measures it, teaches it, and measures it again. The
  * games it learns from and the games it is measured with are apart from one
@@ -137,23 +160,7 @@ static bool arena_train_one(const arena_settings_t *settings, init_scheme_t sche
 	/* and what it is like afterwards, on games it has not seen */
 	arena_measure(settings, network, &after);
 
-	result->win_rate_before = 100.0 * before.evaluation.wins / before.evaluation.games;
-	result->win_rate_after = 100.0 * after.evaluation.wins / after.evaluation.games;
-	result->brier_before = before.evaluation.brier_score;
-	result->brier_after = after.evaluation.brier_score;
-	result->truth_before = before.evaluation.truth_error;
-	result->truth_after = after.evaluation.truth_error;
-	result->value_lost_before = before.skill.moves > 0 ?
-		before.skill.value_lost / before.skill.moves : 0.0;
-	result->value_lost_after = after.skill.moves > 0 ?
-		after.skill.value_lost / after.skill.moves : 0.0;
-	result->value_lost_own_before = before.own_skill.moves > 0 ?
-		before.own_skill.value_lost / before.own_skill.moves : 0.0;
-	result->value_lost_own_after = after.own_skill.moves > 0 ?
-		after.own_skill.value_lost / after.own_skill.moves : 0.0;
-	result->perfect_before = before.perfect;
-	result->perfect_after = after.perfect;
-	result->trained_games = trained;
+	arena_result_of(&before, &after, trained, result);
 
 	return true;
 }
@@ -244,6 +251,129 @@ static int arena_winner_of_the_round_robin(const arena_report_t *report)
 	}
 
 	return tied ? -1 : best;
+}
+
+/* Fills in what the two models were like at one stage of a duel. */
+static void arena_stage(const arena_settings_t *settings, const network_t *first,
+                        const arena_look_t *first_look, const network_t *second,
+                        const arena_look_t *second_look, arena_stage_result_t *stage)
+{
+	stage->value_lost[0] = first_look->skill.moves > 0 ?
+		first_look->skill.value_lost / first_look->skill.moves : 0.0;
+	stage->value_lost[1] = second_look->skill.moves > 0 ?
+		second_look->skill.value_lost / second_look->skill.moves : 0.0;
+	stage->truth[0] = first_look->evaluation.truth_error;
+	stage->truth[1] = second_look->evaluation.truth_error;
+	stage->perfect_draws[0] = first_look->perfect.draws;
+	stage->perfect_draws[1] = second_look->perfect.draws;
+	stage->perfect_losses[0] = first_look->perfect.losses;
+	stage->perfect_losses[1] = second_look->perfect.losses;
+
+	evaluate_against(first, second, settings->evaluation_seed, settings->match_games,
+	                 0.0, &stage->meeting);
+}
+
+/*
+ * Plays a game between the two models and tallies it.
+ */
+static void arena_tally_a_game(const game_t *game, int first_is_x, match_result_t *tally)
+{
+	game_result_t outcome = game_result(game);
+
+	if (outcome == GAME_DRAW) {
+		tally->draws++;
+	} else if ((outcome == GAME_X_WINS) == (first_is_x != 0)) {
+		tally->first_wins++;
+
+		if (first_is_x) tally->first_wins_as_x++;
+	} else {
+		tally->second_wins++;
+	}
+
+	tally->games++;
+}
+
+bool arena_duel(const arena_settings_t *settings, unsigned long long first_seed,
+                unsigned long long second_seed, arena_duel_t *duel)
+{
+	network_t first;
+	network_t second;
+	policy_t first_policy;
+	policy_t second_policy;
+	trainer_t first_trainer;
+	trainer_t second_trainer;
+	arena_look_t first_before;
+	arena_look_t first_after;
+	arena_look_t second_before;
+	arena_look_t second_after;
+	rng_t first_rng;
+	rng_t second_rng;
+
+	if (settings == NULL || duel == NULL) return false;
+	if (settings->training_games < 0 || settings->evaluation_games < 1) return false;
+	if (settings->match_games < 1) return false;
+	if (settings->hidden_neurons < 1) return false;
+
+	memset(duel, 0, sizeof(*duel));
+
+	/* the two models, each started off with its own seed */
+	rng_seed(&first_rng, first_seed);
+	rng_seed(&second_rng, second_seed);
+
+	if (!arena_build(&first, settings, INIT_RANDOM, &first_rng)) return false;
+	if (!arena_build(&second, settings, INIT_RANDOM, &second_rng)) return false;
+
+	arena_measure(settings, &first, &first_before);
+	arena_measure(settings, &second, &second_before);
+	evaluate_initialisation(&first, &duel->stages[DUEL_BEFORE].initialisation[0]);
+	evaluate_initialisation(&second, &duel->stages[DUEL_BEFORE].initialisation[1]);
+
+	/* and how they fare against each other before either has learned
+	 * anything */
+	arena_stage(settings, &first, &first_before, &second, &second_before,
+	            &duel->stages[DUEL_BEFORE]);
+
+	/* each of them learns from the games it plays against itself */
+	trainer_init(&first_trainer, &first, settings->learning_rate);
+	trainer_init(&second_trainer, &second, settings->learning_rate);
+	policy_init(&first_policy, &first, first_seed, settings->temperature);
+	policy_init(&second_policy, &second, second_seed, settings->temperature);
+
+	trainer_run(&first_trainer, &first_policy, settings->training_games);
+	trainer_run(&second_trainer, &second_policy, settings->training_games);
+
+	arena_measure(settings, &first, &first_after);
+	arena_measure(settings, &second, &second_after);
+
+	/* and they meet again */
+	arena_stage(settings, &first, &first_after, &second, &second_after,
+	            &duel->stages[DUEL_OWN_GAMES]);
+
+	/* and now they learn against each other */
+	for (int i = 0; i < settings->training_games; i++) {
+		game_t game;
+		int first_is_x = (i % 2) == 0;
+
+		if (first_is_x)
+			game_play(&game, &first_policy, &second_policy);
+		else
+			game_play(&game, &second_policy, &first_policy);
+
+		arena_tally_a_game(&game, first_is_x, &duel->together_games);
+
+		/* both of them learn the result of the game they played */
+		trainer_train_game(&first_trainer, &game);
+		trainer_train_game(&second_trainer, &game);
+	}
+
+	arena_measure(settings, &first, &first_after);
+	arena_measure(settings, &second, &second_after);
+
+	/* and they meet once more */
+	arena_stage(settings, &first, &first_after, &second, &second_after,
+	            &duel->stages[DUEL_TOGETHER]);
+
+	return true;
 }
 
 bool arena_survey(const arena_settings_t *settings, int runs, arena_survey_t *survey)

@@ -395,6 +395,64 @@ static void run_the_arena(void)
 	}
 }
 
+/*
+ * Two models, each with a seed of its own, and how they fare against each
+ * other: before either has learned anything, after each has learned from
+ * its own games, and after they have learned against each other.
+ *
+ * Neither is taught by the perfect player here. Each learns from the result
+ * of the games it plays, which is what a model has to do when there is
+ * nobody to tell it the answer.
+ */
+static void run_the_duel(void)
+{
+	arena_settings_t settings;
+	arena_duel_t duel;
+
+	arena_settings_init(&settings);
+	settings.training_games = 50000;
+
+	printf("\ntwo models, each with a seed of its own\n");
+	printf("  %d games of training each, %d games when they meet\n\n",
+	       settings.training_games, settings.match_games);
+
+	if (!arena_duel(&settings, 42, 1978, &duel)) {
+		printf("  the duel could not be run\n");
+		return;
+	}
+
+	const char *stages[ARENA_DUEL_STAGES] = {
+		"before either has learned anything",
+		"after each has learned from its own games",
+		"after they have learned against each other"
+	};
+
+	printf("  %-30s %10s %10s\n", "", "seed 42", "seed 1978");
+
+	for (int stage = 0; stage < ARENA_DUEL_STAGES; stage++) {
+		arena_stage_result_t *at = &duel.stages[stage];
+
+		printf("\n  %s\n", stages[stage]);
+		printf("    %-28s %10.3f %10.3f\n", "gave away a move",
+		       at->value_lost[0], at->value_lost[1]);
+		printf("    %-28s %10.3f %10.3f\n", "out by the truth",
+		       at->truth[0], at->truth[1]);
+		printf("    %-28s %10d %10d\n", "drew with the perfect player",
+		       at->perfect_draws[0], at->perfect_draws[1]);
+		printf("    %-28s %10d %10d\n", "lost to the perfect player",
+		       at->perfect_losses[0], at->perfect_losses[1]);
+		printf("    %-28s %10d %10d\n", "seed 42 won",
+		       at->meeting.first_wins, at->meeting.second_wins);
+		printf("    %-28s %10d %10d\n", "the games were drawn",
+		       at->meeting.draws, at->meeting.draws);
+	}
+
+	printf("\n  the games they learned against each other: %d won, %d drawn,"
+	       " %d lost, of %d\n", duel.together_games.first_wins,
+	       duel.together_games.draws, duel.together_games.second_wins,
+	       duel.together_games.games);
+}
+
 int main(int argc, char *argv[], char *env[]) {
 	UNUSED(argc);
 	UNUSED(argv);
@@ -421,6 +479,9 @@ int main(int argc, char *argv[], char *env[]) {
 
 	printf("\n");
 	run_the_arena();
+
+	printf("\n");
+	run_the_duel();
 
 	return EXIT_SUCCESS;
 }
