@@ -87,6 +87,27 @@ The results, over five runs with a seed of their own:
   maximum  won the round robin 0 times out of 5;  it won 700 and lost 918
 ```
 
+## Two models and nobody to tell them the answers
+
+The arena above is taught by the perfect player. The duel is not: two
+models, each with a seed of its own, each learning from the result of the
+games it plays. They meet three times — before either has learned
+anything, after each has learned from its own games, and after they have
+learned against each other.
+
+```
+  before either has learned anything   seed 42 won 100, seed 1978 won 100, none drawn
+  after each has learned on its own     28 won, 109 drawn, 63 lost
+  after they have learned together      37 won, 105 drawn, 58 lost
+```
+
+A model does learn from its own games — the truth error falls from 0.34 to
+0.21 over fifty thousand of them — and two models that learned separately
+agree with each other. Learning against each other afterwards adds nothing,
+and the measurement says so: against the perfect player the first of them
+gets worse, having spent fifty thousand games learning one opponent
+instead of the game.
+
 ## Project structure
 
 ```

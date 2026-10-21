@@ -176,7 +176,57 @@ believing that every position is a loss, which is exactly what it does.
 
 ---
 
-## 4. The answers to the questions in the notes
+## 4. Two models, and nobody to tell them the answers
+
+Everything above had the perfect player teaching the model what each
+position was worth. The arena can leave it out: a model can learn from the
+result of the games it plays, and the question is whether that is enough.
+
+So: two models, each with a seed of its own, neither of them taught by
+anybody. Seed 42 and seed 1978, fifty thousand games of training each, and
+they meet three times.
+
+| | seed 42 | seed 1978 |
+|---|---|---|
+| **before either has learned anything** | | |
+| gave away a move | 0.590 | 0.365 |
+| out by the truth | 0.337 | 0.240 |
+| drew with the perfect player | 0 | 100 |
+| seed 42 won | 100 | 100 |
+| the games were drawn | 0 | 0 |
+| **after each has learned from its own games** | | |
+| gave away a move | 0.394 | 0.317 |
+| out by the truth | 0.210 | 0.209 |
+| drew with the perfect player | 83 | 95 |
+| seed 42 won | 28 | 63 |
+| the games were drawn | 109 | 109 |
+| **after they have learned against each other** | | |
+| gave away a move | 0.324 | 0.300 |
+| out by the truth | 0.205 | 0.186 |
+| drew with the perfect player | 62 | 90 |
+| seed 42 won | 37 | 58 |
+| the games were drawn | 105 | 105 |
+
+**A model does learn without being told the answers.** Over fifty thousand
+games of its own the truth error fell from 0.34 to 0.21 and the worth it
+gave away fell from 0.59 to 0.39. It is well short of the model the
+perfect player taught, which draws every game against the perfect player,
+but it is a long way from the model that had learned nothing.
+
+**Two models that learned separately agree.** They drew 109 games out of
+200 against each other, where before either of them had learned anything
+they drew none at all — every game was the same game, and the first player
+always won it. Two different starting points, the same game.
+
+**Learning against each other afterwards adds nothing.** The truth error
+barely moves, and against the perfect player the first of them gets
+*worse* rather than better: 83 draws became 62. Fifty thousand games of
+learning one opponent instead of the game is not the same as fifty
+thousand games of learning the game, and the measurement says so.
+
+---
+
+## 5. The answers to the questions in the notes
 
 **Which initialisation learns the game best?** Random. It is the only one
 that learns, and it wins the round robin in five runs out of five.
@@ -205,15 +255,21 @@ model, because the faults are in the positions it never reaches.
 
 ---
 
-## 5. What is still open
+## 6. What is still open
 
 **The self-play teacher.** Its target is the result of the game under the
-model's own current play, so it chases a moving target: 93 draws out of a
-hundred against the perfect player after fifty thousand games, where the
-perfect player's own teaching reaches 200 out of 200 after ten thousand. A
-bootstrapped target — the worth of the position after the move, taken from
-the model's own estimates — was tried with the old shape of the model and
-stalled at 60%; it has not been tried with the current one.
+model's own current play, so it chases a moving target. Fifty thousand
+games of it take the truth error from 0.34 to 0.21 and draw about forty
+games in a hundred against the perfect player, where the perfect player's
+own teaching reaches 200 out of 200 after ten thousand. A bootstrapped
+target — the worth of the position after the move, taken from the model's
+own estimates — was tried with the old shape of the model and stalled at
+60%; it has not been tried with the current one.
+
+**Learning from games against a fixed opponent.** The duel shows what
+happens when two models spend their games on each other: they get good at
+each other and no better. Whether a model could be taught by an opponent
+that is itself improving — the way a league works — is untried.
 
 **The models are narrow.** A model learns the worth of the positions it
 visits. With enough games it covers the game well enough to play it
