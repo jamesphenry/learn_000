@@ -27,7 +27,8 @@ visits is worth, or by its own games, where the result of the game is the
 target. The second has a moving target and learns more slowly; both are in
 the arena.
 
-<video src="assets/Perfect_Model_Paradox.mp4" controls width="800"></video>
+<video src="assets/Perfect_Model_Paradox.mp4"  width="100%" controls loop muted></video>
+
 
 ## The pieces
 
