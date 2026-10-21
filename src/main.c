@@ -8,6 +8,7 @@
 #include "judge.h"
 #include "minimax.h"
 #include "network.h"
+#include "nim.h"
 #include "policy.h"
 #include "tictactoe.h"
 #include "trainer.h"
@@ -134,15 +135,14 @@ static void run_the_experiments(void)
 
 /*
  * A game played by the network on both sides. The network was told to like
- * the top right cell, and O does the opposite, so the two of them end up
- * fighting over it.
+ * the first two numbers and to dislike the third, so the two of them end up
+ * fighting over the third.
  */
-static void play_a_game(const game_t *game)
+static void play_a_game(const game_t *game, void (*show)(const game_position_t *))
 {
 	network_t network;
 	policy_t policy;
 	game_trace_t trace;
-	const board_t *board;
 
 	network_init(&network);
 	network_add_layer(&network, game->n_features, 2, ACTIVATION_CLAMP);
@@ -158,13 +158,28 @@ static void play_a_game(const game_t *game)
 	policy_init(&policy, game, &network, 1, 0.1);
 	game_play(game, policy_choose, &policy, policy_choose, &policy, &trace);
 
-	board = (const board_t *)trace.position.state.bytes;
-	print_board(board);
+	if (show != NULL) show(&trace.position);
 
 	printf("%d moves, and the game %s\n", trace.n_played,
 	       game->outcome(&trace.position) == GAME_FIRST_WINS ? "went to the first player" :
 	       game->outcome(&trace.position) == GAME_SECOND_WINS ? "went to the second player" :
 	       "was drawn");
+}
+
+/* The board of a game of tic-tac-toe. */
+static void show_the_board(const game_position_t *position)
+{
+	print_board((const board_t *)position->state.bytes);
+}
+
+/* The heaps of a game of Nim. */
+static void show_the_heaps(const game_position_t *position)
+{
+	const nim_t *nim = nim_state_of(position);
+
+	printf("the heaps are %d, %d and %d, and %d stones are left\n",
+	       nim->heaps[0], nim->heaps[1], nim->heaps[2],
+	       nim->heaps[0] + nim->heaps[1] + nim->heaps[2]);
 }
 
 /*
@@ -297,24 +312,24 @@ static void ask_the_minimax(void)
 }
 
 /*
- * A referee, looking at a game in which a move was not allowed.
+ * A referee, looking at a game in which a move was not allowed: the first
+ * move of the game is played, and then offered again.
  */
 static void judge_a_game(const game_t *game, const oracle_t *oracle)
 {
 	game_trace_t trace;
 	judgement_t verdict;
 	game_position_t position;
+	game_move_t move;
 
 	game->start(&position);
-	game->play(&position, CELL_TOP_LEFT);
-	game->play(&position, CELL_CENTER);
+	move = position.moves[0];
 
-	/* the top left is taken, so this one is not allowed */
 	trace.n_offered = 0;
 	trace.n_played = 0;
-	trace.offered[trace.n_offered++] = CELL_TOP_LEFT;
-	trace.offered[trace.n_offered++] = CELL_CENTER;
-	trace.offered[trace.n_offered++] = CELL_TOP_LEFT;
+	trace.offered[trace.n_offered++] = move;
+	game->play(&position, move);
+	trace.offered[trace.n_offered++] = move;
 	trace.position = position;
 
 	judge_game(game, oracle, &trace, &verdict);
@@ -529,12 +544,13 @@ static void run_the_league(const game_t *game, const oracle_t *oracle, int model
 int main(int argc, char *argv[], char *env[]) {
 	game_t game;
 	oracle_t oracle;
+	int models = argc > 1 ? atoi(argv[1]) : 12;
 
 	UNUSED(env);
 
 	greet("Hello, World!");
 
-	/* the game the demo plays, and the perfect player that goes with it */
+	/* the game of tic-tac-toe, and the perfect player that goes with it */
 	tictactoe_game(&game);
 	tictactoe_oracle(&oracle);
 
@@ -543,11 +559,13 @@ int main(int argc, char *argv[], char *env[]) {
 		return EXIT_FAILURE;
 	}
 
+	printf("\nthe game of tic-tac-toe\n");
+
 	score_a_game();
 	run_the_experiments();
 
 	printf("\n");
-	play_a_game(&game);
+	play_a_game(&game, show_the_board);
 
 	printf("\n");
 	train_a_network(&game);
@@ -568,7 +586,33 @@ int main(int argc, char *argv[], char *env[]) {
 	run_the_duel(&game, &oracle);
 
 	printf("\n");
-	run_the_league(&game, &oracle, argc > 1 ? atoi(argv[1]) : 12);
+	run_the_league(&game, &oracle, models);
+
+	oracle_stop(&oracle);
+
+	/* and the very same demonstration, with the game of Nim, to show that
+	 * none of it knows what game it is playing */
+	nim_game(&game);
+	nim_oracle(&oracle);
+
+	if (!oracle_start(&oracle)) {
+		printf("the perfect player could not be started\n");
+		return EXIT_FAILURE;
+	}
+
+	printf("\nthe game of Nim\n");
+
+	printf("\n");
+	play_a_game(&game, show_the_heaps);
+
+	printf("\n");
+	measure_a_network(&game, &oracle);
+
+	printf("\n");
+	judge_a_game(&game, &oracle);
+
+	printf("\n");
+	run_the_arena(&game, &oracle);
 
 	oracle_stop(&oracle);
 
