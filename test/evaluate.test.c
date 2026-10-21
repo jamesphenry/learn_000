@@ -174,8 +174,11 @@ static double expected_truth_error(network_t *network)
 {
 	policy_t network_policy;
 	policy_t random_policy;
+	minimax_t oracle;
 	double total = 0.0;
 	int moves = 0;
+
+	minimax_init(&oracle);
 	policy_init(&network_policy, network, 1, 0.0);
 	policy_init(&random_policy, network, 2, INFINITY);
 
@@ -198,7 +201,7 @@ static double expected_truth_error(network_t *network)
 			board_to_inputs(&positions[step], inputs);
 			network_forward(network, inputs, CELL_COUNT, &worth, 1);
 
-			total += fabs(worth - minimax_x_win_chance(&positions[step]));
+			total += fabs(worth - minimax_x_win_chance(&oracle, &positions[step]));
 			moves++;
 		}
 	}

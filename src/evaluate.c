@@ -73,6 +73,7 @@ bool evaluate_skill(const network_t *network, unsigned long long seed, int games
 	policy_t policy;
 	game_t game;
 	board_t positions[CELL_COUNT];
+	minimax_t oracle;
 	int moves = 0;
 	int kept = 0;
 	int gave_away = 0;
@@ -85,6 +86,7 @@ bool evaluate_skill(const network_t *network, unsigned long long seed, int games
 	memset(result, 0, sizeof(*result));
 
 	policy_init(&policy, (network_t *)network, seed, 0.0);
+	minimax_init(&oracle);
 
 	for (int i = 0; i < games; i++) {
 		game_play(&game, &policy, &policy);
@@ -96,7 +98,7 @@ bool evaluate_skill(const network_t *network, unsigned long long seed, int games
 			board_t after;
 			int lost;
 
-			perfect = minimax_at(&positions[step]);
+			perfect = minimax_at(&oracle, &positions[step]);
 
 			/* the game was over, so no move was left to make */
 			if (perfect.move < 0) continue;
@@ -104,7 +106,7 @@ bool evaluate_skill(const network_t *network, unsigned long long seed, int games
 			/* the position the move left behind */
 			after = positions[step];
 			after.cells[game.history[step]] = encode_mark(after.current_player);
-			then = minimax_at(&after);
+			then = minimax_at(&oracle, &after);
 
 			/* the perfect player knows the position is worth perfect.value
 			 * to the player to move, and the move that was played left it
@@ -148,6 +150,7 @@ bool evaluate_against_perfect(const network_t *network, unsigned long long seed,
                               int games, perfect_result_t *result)
 {
 	policy_t policy;
+	minimax_t oracle;
 	int wins = 0;
 	int draws = 0;
 	int losses = 0;
@@ -158,6 +161,7 @@ bool evaluate_against_perfect(const network_t *network, unsigned long long seed,
 	memset(result, 0, sizeof(*result));
 
 	policy_init(&policy, (network_t *)network, seed, 0.0);
+	minimax_init(&oracle);
 
 	for (int i = 0; i < games; i++) {
 		board_t board;
@@ -172,7 +176,7 @@ bool evaluate_against_perfect(const network_t *network, unsigned long long seed,
 			if ((board.current_player == 'X') == (network_is_x != 0)) {
 				if (!policy_select_move(&policy, &board, &move)) break;
 			} else {
-				minimax_result_t perfect = minimax_at(&board);
+				minimax_result_t perfect = minimax_at(&oracle, &board);
 
 				if (perfect.move < 0) break;
 				move = (board_cell_t)perfect.move;
@@ -224,6 +228,7 @@ bool evaluate_network(const network_t *network, unsigned long long seed, int gam
 	policy_t random_policy;
 	game_t game;
 	board_t positions[CELL_COUNT];
+	minimax_t oracle;
 	double total = 0.0;
 	double truth_total = 0.0;
 	int moves = 0;
@@ -235,6 +240,7 @@ bool evaluate_network(const network_t *network, unsigned long long seed, int gam
 
 	policy_init(&network_policy, (network_t *)network, seed, 0.0);
 	policy_init(&random_policy, (network_t *)network, seed + 1, RANDOM_TEMPERATURE);
+	minimax_init(&oracle);
 
 	for (int i = 0; i < games; i++) {
 		game_result_t outcome;
@@ -293,7 +299,7 @@ bool evaluate_network(const network_t *network, unsigned long long seed, int gam
 
 			/* and how far it is from what the perfect player knows the
 			 * position to be worth */
-			truth_total += fabs(worth - minimax_x_win_chance(&positions[step]));
+			truth_total += fabs(worth - minimax_x_win_chance(&oracle, &positions[step]));
 
 			if (outcome == GAME_X_WINS) result->moves_in_x_wins++;
 			if (outcome == GAME_DRAW) result->moves_in_draws++;

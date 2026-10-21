@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include "minimax.h"
 
 /* The board in the minimax's own terms, so that the rules it plays by are
@@ -6,9 +7,6 @@
 #define MINIMAX_EMPTY 0
 #define MINIMAX_X 1
 #define MINIMAX_O 2
-
-/* Every position there is, three to the ninth: 19683 of them. */
-#define MINIMAX_STATES 19683
 
 /* The eight lines of three. */
 static const int minimax_lines[8][3] = {
@@ -118,12 +116,22 @@ char minimax_winner(const board_t *board)
 	return 0;
 }
 
-minimax_result_t minimax_at(const board_t *board)
+void minimax_init(minimax_t *minimax)
+{
+	if (minimax == NULL) return;
+
+	for (int i = 0; i < MINIMAX_STATES; i++)
+		minimax->values[i] = 0;
+}
+
+minimax_result_t minimax_at(minimax_t *minimax, const board_t *board)
 {
 	int cells[MINIMAX_CELLS];
 	minimax_result_t result = { -1, 0 };
 	int turn;
 	int winner;
+
+	if (minimax == NULL || board == NULL) return result;
 
 	minimax_read(board, cells);
 	turn = minimax_turn(cells);
@@ -135,7 +143,6 @@ minimax_result_t minimax_at(const board_t *board)
 		return result;
 	}
 
-	int values[MINIMAX_STATES] = { 0 };
 	int best = -2;
 	int other = (turn == MINIMAX_X) ? MINIMAX_O : MINIMAX_X;
 
@@ -143,7 +150,7 @@ minimax_result_t minimax_at(const board_t *board)
 		if (cells[cell] != MINIMAX_EMPTY) continue;
 
 		cells[cell] = turn;
-		int score = -minimax_score(cells, other, values);
+		int score = -minimax_score(cells, other, minimax->values);
 		cells[cell] = MINIMAX_EMPTY;
 
 		if (score > best) {
@@ -157,9 +164,9 @@ minimax_result_t minimax_at(const board_t *board)
 	return result;
 }
 
-double minimax_x_win_chance(const board_t *board)
+double minimax_x_win_chance(minimax_t *minimax, const board_t *board)
 {
-	minimax_result_t result = minimax_at(board);
+	minimax_result_t result = minimax_at(minimax, board);
 	int cells[MINIMAX_CELLS];
 
 	if (result.value == 0) return 0.5;

@@ -59,7 +59,10 @@ static int arena_learn_from_the_truth(trainer_t *trainer, policy_t *policy, int 
 {
 	game_t game;
 	board_t positions[CELL_COUNT];
+	minimax_t oracle;
 	int learned = 0;
+
+	minimax_init(&oracle);
 
 	for (int i = 0; i < games; i++) {
 		game_play(&game, policy, policy);
@@ -67,7 +70,7 @@ static int arena_learn_from_the_truth(trainer_t *trainer, policy_t *policy, int 
 
 		for (int step = 0; step < game.moves; step++) {
 			if (!trainer_train_position(trainer, &positions[step],
-			                            minimax_x_win_chance(&positions[step])))
+			                            minimax_x_win_chance(&oracle, &positions[step])))
 				return learned;
 		}
 
