@@ -193,7 +193,7 @@ static char *test_the_curve_measures_the_same_ground_all_the_way_along(void)
 	settings.training_games = 0;
 
 	_it_should("measure the curve",
-		analysis_curve(&settings, &game, &oracle, budgets, 2, 1, &curve));
+		analysis_curve(&settings, &game, &oracle, INIT_RANDOM, budgets, 2, 1, &curve));
 
 	_it_should("hold both budgets", curve.budgets == 2 && curve.budget[0] == 0 &&
 	                                      curve.budget[1] == 10);
@@ -216,6 +216,91 @@ static char *test_the_curve_measures_the_same_ground_all_the_way_along(void)
 	return NULL;
 }
 
+/*
+ * How far a model moved: a model that has one weight changed by one, and
+ * nothing else, has four numbers in it, so the movement is a quarter.
+ */
+static char *test_it_measures_how_far_a_model_moved(void)
+{
+	network_t before;
+	network_t after;
+	movement_t moved;
+
+	network_init(&before);
+	network_add_layer(&before, 1, 1, ACTIVATION_RELU);
+	network_add_layer(&before, 1, 1, ACTIVATION_SIGMOID);
+
+	after = before;
+
+	_it_should("say that a model that has not moved has not moved",
+		analysis_movement(&before, &after, &moved) && moved.all == 0.0 &&
+		moved.hidden == 0.0 && moved.output == 0.0);
+
+	after.layers[0].weights[0][0] += 1.0;
+
+	_it_should("measure the change in the hidden layer",
+		analysis_movement(&before, &after, &moved) && nearly_equal(moved.hidden, 0.5));
+	_it_should("leave the output layer alone",
+		nearly_equal(moved.output, 0.0));
+	_it_should("measure the change over all of it",
+		nearly_equal(moved.all, 0.25));
+
+	return NULL;
+}
+
+/*
+ * Two models that are not the same shape cannot be compared.
+ */
+static char *test_it_refuses_to_compare_models_of_different_shapes(void)
+{
+	network_t before;
+	network_t after;
+	movement_t moved;
+
+	network_init(&before);
+	network_add_layer(&before, 1, 1, ACTIVATION_RELU);
+	network_add_layer(&before, 1, 1, ACTIVATION_SIGMOID);
+
+	network_init(&after);
+	network_add_layer(&after, 2, 1, ACTIVATION_RELU);
+	network_add_layer(&after, 1, 1, ACTIVATION_SIGMOID);
+
+	_it_should("refuse no model before",
+		!analysis_movement(NULL, &after, &moved));
+	_it_should("refuse no model after",
+		!analysis_movement(&before, NULL, &moved));
+	_it_should("refuse nowhere to put the result",
+		!analysis_movement(&before, &after, NULL));
+	_it_should("refuse two models of different shapes",
+		!analysis_movement(&before, &after, &moved));
+
+	return NULL;
+}
+
+/*
+ * The curve keeps the movement of the weights of every model it measured: a
+ * model that has not played a game has not moved.
+ */
+static char *test_the_curve_keeps_how_far_the_models_moved(void)
+{
+	arena_settings_t settings;
+	analysis_curve_t curve;
+	int budgets[2] = { 0, 10 };
+
+	arena_settings_init(&settings);
+	settings.hidden_neurons = 4;
+
+	_it_should("measure the curve",
+		analysis_curve(&settings, &game, &oracle, INIT_RANDOM, budgets, 2, 1, &curve));
+
+	_it_should("say that a model that has not played has not moved",
+		curve.movement[0][0].all == 0.0);
+	_it_should("say that a model that has played has moved",
+		curve.movement[1][0].all > 0.0);
+
+	return NULL;
+}
+
 static char *test_the_curve_refuses_bad_arguments(void)
 {
 	arena_settings_t settings;
@@ -225,19 +310,20 @@ static char *test_the_curve_refuses_bad_arguments(void)
 	arena_settings_init(&settings);
 
 	_it_should("refuse no settings",
-		!analysis_curve(NULL, &game, &oracle, budgets, 2, 1, &curve));
+		!analysis_curve(NULL, &game, &oracle, INIT_RANDOM, budgets, 2, 1, &curve));
 	_it_should("refuse no game",
-		!analysis_curve(&settings, NULL, &oracle, budgets, 2, 1, &curve));
+		!analysis_curve(&settings, NULL, &oracle, INIT_RANDOM, budgets, 2, 1, &curve));
 	_it_should("refuse no perfect player",
-		!analysis_curve(&settings, &game, NULL, budgets, 2, 1, &curve));
+		!analysis_curve(&settings, &game, NULL, INIT_RANDOM, budgets, 2, 1, &curve));
 	_it_should("refuse no budgets",
-		!analysis_curve(&settings, &game, &oracle, NULL, 2, 1, &curve));
+		!analysis_curve(&settings, &game, &oracle, INIT_RANDOM, NULL, 2, 1, &curve));
 	_it_should("refuse nowhere to put the curve",
-		!analysis_curve(&settings, &game, &oracle, budgets, 2, 1, NULL));
+		!analysis_curve(&settings, &game, &oracle, INIT_RANDOM, budgets, 2, 1, NULL));
 	_it_should("refuse no seeds",
-		!analysis_curve(&settings, &game, &oracle, budgets, 2, 0, &curve));
+		!analysis_curve(&settings, &game, &oracle, INIT_RANDOM, budgets, 2, 0, &curve));
 	_it_should("refuse more budgets than it can hold",
-		!analysis_curve(&settings, &game, &oracle, budgets, ANALYSIS_MAX_BUDGETS + 1, 1, &curve));
+		!analysis_curve(&settings, &game, &oracle, INIT_RANDOM, budgets,
+		ANALYSIS_MAX_BUDGETS + 1, 1, &curve));
 
 	return NULL;
 }
@@ -252,6 +338,9 @@ static char *run_tests(void)
 	_run_test(test_a_model_that_says_nothing_is_half_way_off);
 	_run_test(test_a_model_that_calls_everything_a_loss_is_wrong_by_the_wins);
 	_run_test(test_it_measures_the_moves_too);
+	_run_test(test_it_measures_how_far_a_model_moved);
+	_run_test(test_it_refuses_to_compare_models_of_different_shapes);
+	_run_test(test_the_curve_keeps_how_far_the_models_moved);
 	_run_test(test_the_curve_measures_the_same_ground_all_the_way_along);
 	_run_test(test_the_curve_refuses_bad_arguments);
 

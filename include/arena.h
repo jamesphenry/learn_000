@@ -131,6 +131,22 @@ bool arena_train(const arena_settings_t *settings, const game_t *game,
                  network_t *network, int *trained);
 
 /*
+ * Builds a model the way the arena does, and starts it off in the way that is
+ * asked for. It does not teach it anything.
+ */
+bool arena_build(const game_t *game, network_t *network,
+                 const arena_settings_t *settings, init_scheme_t scheme,
+                 rng_t *rng);
+
+/*
+ * Teaches a model the way the settings say: the perfect player teaches it,
+ * when the settings say so, and otherwise it learns from the result of the
+ * games it plays against itself. It says how many games it learned from.
+ */
+bool arena_teach(const arena_settings_t *settings, const game_t *game,
+                 const oracle_t *oracle, network_t *network, int *trained);
+
+/*
  * Builds all three models, gives them the same conditions, measures each of
  * them, and then has them play each other.
  */

@@ -161,9 +161,71 @@ bool analysis_fixed_set(const game_t *game, const oracle_t *oracle,
 	return true;
 }
 
+bool analysis_movement(const network_t *before, const network_t *after,
+                       movement_t *result)
+{
+	double hidden_total = 0.0;
+	double hidden_count = 0.0;
+	double output_total = 0.0;
+	double output_count = 0.0;
+	double all_total = 0.0;
+	double all_count = 0.0;
+
+	if (before == NULL || after == NULL || result == NULL) return false;
+	if (before->n_layers != after->n_layers) return false;
+
+	memset(result, 0, sizeof(*result));
+
+	for (int layer = 0; layer < before->n_layers; layer++) {
+		const layer_t *from = &before->layers[layer];
+		const layer_t *to = &after->layers[layer];
+		double total = 0.0;
+		double count = 0.0;
+
+		if (from->n_inputs != to->n_inputs) return false;
+		if (from->n_neurons != to->n_neurons) return false;
+
+		for (int neuron = 0; neuron < from->n_neurons; neuron++) {
+			for (int input = 0; input < from->n_inputs; input++) {
+				double change = fabs(from->weights[neuron][input] -
+				                     to->weights[neuron][input]);
+
+				total += change;
+				count += 1.0;
+			}
+
+			{
+				double change = fabs(from->biases[neuron] -
+				                     to->biases[neuron]);
+
+				total += change;
+				count += 1.0;
+			}
+		}
+
+		all_total += total;
+		all_count += count;
+
+		if (layer == 0) {
+			hidden_total = total;
+			hidden_count = count;
+		} else {
+			output_total = total;
+			output_count = count;
+		}
+	}
+
+	result->hidden = hidden_count > 0 ? hidden_total / hidden_count : 0.0;
+	result->output = output_count > 0 ? output_total / output_count : 0.0;
+	result->all = all_count > 0 ? all_total / all_count : 0.0;
+
+	return true;
+}
+
 bool analysis_curve(const arena_settings_t *settings, const game_t *game,
-                    const oracle_t *oracle, const int *budgets, int budgets_count,
-                    int seeds, analysis_curve_t *curve)
+                    const oracle_t *oracle, init_scheme_t scheme,
+                    const int *budgets, int budgets_count, int seeds,
+                    analysis_curve_t *curve)
 {
 	if (settings == NULL || game == NULL || oracle == NULL || budgets == NULL) return false;
 	if (curve == NULL) return false;
@@ -183,6 +245,7 @@ bool analysis_curve(const arena_settings_t *settings, const game_t *game,
 		for (int seed = 0; seed < seeds; seed++) {
 			arena_settings_t run = *settings;
 			network_t network;
+			network_t before;
 			rng_t rng;
 
 			/* each seed is the one before it with one added to it */
@@ -191,7 +254,14 @@ bool analysis_curve(const arena_settings_t *settings, const game_t *game,
 
 			rng_seed(&rng, run.training_seed);
 
-			if (!arena_train(&run, game, oracle, INIT_RANDOM, &rng, &network, NULL))
+			/* the model as it is before it has learned anything */
+			if (!arena_build(game, &network, &run, scheme, &rng)) return false;
+
+			before = network;
+
+			if (!arena_teach(&run, game, oracle, &network, NULL)) return false;
+
+			if (!analysis_movement(&before, &network, &curve->movement[budget][seed]))
 				return false;
 
 			if (!analysis_fixed_set(game, oracle, &network, run.evaluation_seed,

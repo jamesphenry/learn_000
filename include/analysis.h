@@ -70,6 +70,27 @@ bool analysis_fixed_set(const game_t *game, const oracle_t *oracle,
 #define ANALYSIS_MAX_SEEDS 8
 
 /*
+ * How much a model moved while it was learning: the mean change in its
+ * weights and its biases.
+ */
+typedef struct {
+	/* the mean change in the hidden layer */
+	double hidden;
+
+	/* and in the output layer */
+	double output;
+
+	/* and in all of them together */
+	double all;
+} movement_t;
+
+/*
+ * How much a model moved between two of its states.
+ */
+bool analysis_movement(const network_t *before, const network_t *after,
+                       movement_t *result);
+
+/*
  * The curve of learning: how a model does on the fixed set as it learns more.
  *
  * Every budget is given to a model of its own, and every model is measured
@@ -86,16 +107,21 @@ typedef struct {
 
 	/* the measurement for each budget and each seed */
 	analysis_t measure[ANALYSIS_MAX_BUDGETS][ANALYSIS_MAX_SEEDS];
+
+	/* how much the weights moved while each model was learning */
+	movement_t movement[ANALYSIS_MAX_BUDGETS][ANALYSIS_MAX_SEEDS];
 } analysis_curve_t;
 
 /*
  * The curve of learning, on the fixed set of positions the game offers.
  *
- * The seed in the settings is the first of the seeds the curve is measured
- * with: each seed is the one before it with one added to it.
+ * Every model starts off in the way that is asked for, and the seed in the
+ * settings is the first of the seeds the curve is measured with: each seed is
+ * the one before it with one added to it.
  */
 bool analysis_curve(const arena_settings_t *settings, const game_t *game,
-                    const oracle_t *oracle, const int *budgets, int budgets_count,
-                    int seeds, analysis_curve_t *curve);
+                    const oracle_t *oracle, init_scheme_t scheme,
+                    const int *budgets, int budgets_count, int seeds,
+                    analysis_curve_t *curve);
 
 #endif // ANALYSIS_H

@@ -24,8 +24,8 @@ void arena_settings_init(arena_settings_t *settings)
 }
 
 /* Builds the network, and starts it off in the way that was asked for. */
-static bool arena_build(const game_t *game, network_t *network,
-                        const arena_settings_t *settings, init_scheme_t scheme, rng_t *rng)
+bool arena_build(const game_t *game, network_t *network,
+                 const arena_settings_t *settings, init_scheme_t scheme, rng_t *rng)
 {
 	network_init(network);
 
@@ -131,8 +131,8 @@ static void arena_result_of(const arena_look_t *before, const arena_look_t *afte
  * The perfect player teaches it, when the settings say so; otherwise it
  * learns from the result of the games it plays against itself.
  */
-static bool arena_teach(const arena_settings_t *settings, const game_t *game,
-                        const oracle_t *oracle, network_t *network, int *trained)
+bool arena_teach(const arena_settings_t *settings, const game_t *game,
+                 const oracle_t *oracle, network_t *network, int *trained)
 {
 	policy_t policy;
 	trainer_t trainer;
@@ -151,7 +151,6 @@ static bool arena_teach(const arena_settings_t *settings, const game_t *game,
 
 	return true;
 }
-
 /*
  * Builds one model, measures it, teaches it, and measures it again. The
  * games it learns from and the games it is measured with are apart from one

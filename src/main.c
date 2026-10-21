@@ -689,14 +689,16 @@ static void show_the_curve_of_learning(const game_t *game, const oracle_t *oracl
 	arena_settings_init(&settings);
 	settings.learning = ARENA_LEARN_TRUTH;
 
-	if (!analysis_curve(&settings, game, oracle, budgets, budgets_count, seeds, &truth)) {
+	if (!analysis_curve(&settings, game, oracle, INIT_RANDOM, budgets,
+	                 budgets_count, seeds, &truth)) {
 		printf("\n  the curve of learning could not be measured\n");
 		return;
 	}
 
 	settings.learning = ARENA_LEARN_SELF;
 
-	if (!analysis_curve(&settings, game, oracle, budgets, budgets_count, seeds, &self)) {
+	if (!analysis_curve(&settings, game, oracle, INIT_RANDOM, budgets,
+	                 budgets_count, seeds, &self)) {
 		printf("\n  the curve of learning could not be measured\n");
 		return;
 	}
@@ -822,7 +824,8 @@ static void show_the_representation(const oracle_t *oracle)
 
 			settings.learning = mode == 0 ? ARENA_LEARN_TRUTH : ARENA_LEARN_SELF;
 
-			if (!analysis_curve(&settings, &game, oracle, budgets, 1, seeds, &curve)) {
+			if (!analysis_curve(&settings, &game, oracle, INIT_RANDOM, budgets, 1,
+			                seeds, &curve)) {
 				printf("  the representation could not be measured\n");
 				return;
 			}
@@ -886,8 +889,8 @@ static void show_the_curve_of_each_representation(const oracle_t *oracle)
 
 		nim_game_with_features(&game, variants[variant]);
 
-		if (!analysis_curve(&settings, &game, oracle, budgets, budgets_count, 1,
-		                    &curves[variant])) {
+		if (!analysis_curve(&settings, &game, oracle, INIT_RANDOM, budgets,
+		                    budgets_count, 1, &curves[variant])) {
 			printf("\n  the curve of each representation could not be measured\n");
 			return;
 		}
@@ -905,6 +908,130 @@ static void show_the_curve_of_each_representation(const oracle_t *oracle)
 
 		for (int variant = 0; variant < count; variant++)
 			printf(" %17.3f", curves[variant].measure[budget][0].truth_error);
+
+		printf("\n");
+	}
+}
+
+/*
+ * The ways of starting off: from nothing, from a random set of weights, or
+ * from the largest weights there are. The same architecture, the same number
+ * of games, the same seeds and the same measurement, so that the only thing
+ * that differs is where the weights began.
+ */
+static void show_the_ways_of_starting_off(const game_t *game, const oracle_t *oracle)
+{
+	const init_scheme_t schemes[] = { INIT_ZERO, INIT_RANDOM, INIT_MAXIMUM };
+	const char *names[] = { "at nought", "at random", "at the largest" };
+	const int count = (int)(sizeof(schemes) / sizeof(schemes[0]));
+	const int budgets[] = { 0, 1000, 2000, 5000, 10000, 20000 };
+	const int budgets_count = (int)(sizeof(budgets) / sizeof(budgets[0]));
+	const int seeds = 3;
+	arena_settings_t settings;
+	analysis_curve_t curves[ARENA_SCHEMES];
+
+	arena_settings_init(&settings);
+	settings.learning = ARENA_LEARN_TRUTH;
+
+	for (int scheme = 0; scheme < count; scheme++) {
+		if (!analysis_curve(&settings, game, oracle, schemes[scheme], budgets,
+		                    budgets_count, seeds, &curves[scheme])) {
+			printf("\n  the ways of starting off could not be measured\n");
+			return;
+		}
+	}
+
+	printf("\n  the ways of starting off: the same %d games, the same %d seeds,"
+	       " the same measurement\n\n", settings.training_games, seeds);
+
+	printf("  %-14s %9s %9s %9s %12s %12s %8s %8s\n", "started off", "out by",
+	       "lowest", "highest", "the best move", "it leaves the", "the hidden",
+	       "the output");
+	printf("  %-14s %9s %9s %9s %12s %12s %8s %8s\n", "", "the truth", "", "",
+	       "of the moves", "opponent lost", "moved", "moved");
+
+	for (int scheme = 0; scheme < count; scheme++) {
+		const analysis_curve_t *curve = &curves[scheme];
+		int last = curve->budgets - 1;
+		double errors[ANALYSIS_MAX_SEEDS];
+		double best[ANALYSIS_MAX_SEEDS];
+		double left[ANALYSIS_MAX_SEEDS];
+		double hidden[ANALYSIS_MAX_SEEDS];
+		double output[ANALYSIS_MAX_SEEDS];
+		double middle, lowest, highest;
+
+		for (int seed = 0; seed < seeds; seed++) {
+			const analysis_t *measured = &curve->measure[last][seed];
+
+			errors[seed] = measured->truth_error;
+			best[seed] = measured->moves > 0 ?
+				(double)measured->best_moves / measured->moves : 0.0;
+			left[seed] = measured->winning_positions > 0 ?
+				(double)measured->winning_moves / measured->winning_positions : 0.0;
+			hidden[seed] = curve->movement[last][seed].hidden;
+			output[seed] = curve->movement[last][seed].output;
+		}
+
+		summarise(errors, seeds, &middle, &lowest, &highest);
+		printf("  %-14s %9.3f %9.3f %9.3f", names[scheme], middle, lowest, highest);
+
+		summarise(best, seeds, &middle, &lowest, &highest);
+		printf(" %12.3f", middle);
+
+		summarise(left, seeds, &middle, &lowest, &highest);
+		printf(" %12.3f", middle);
+
+		summarise(hidden, seeds, &middle, &lowest, &highest);
+		printf(" %8.4f", middle);
+
+		summarise(output, seeds, &middle, &lowest, &highest);
+		printf(" %8.4f\n", middle);
+	}
+
+	printf("\n  the curve of learning of each way of starting off, the middle"
+	       " of %d seeds, out by the truth\n\n", seeds);
+
+	printf("  %8s", "the games");
+	for (int scheme = 0; scheme < count; scheme++) printf(" %14s", names[scheme]);
+	printf("\n");
+
+	for (int budget = 0; budget < budgets_count; budget++) {
+		printf("  %8d", budgets[budget]);
+
+		for (int scheme = 0; scheme < count; scheme++) {
+			double errors[ANALYSIS_MAX_SEEDS];
+			double middle, lowest, highest;
+
+			for (int seed = 0; seed < seeds; seed++)
+				errors[seed] = curves[scheme].measure[budget][seed].truth_error;
+
+			summarise(errors, seeds, &middle, &lowest, &highest);
+			printf(" %14.3f", middle);
+		}
+
+		printf("\n");
+	}
+
+	printf("\n  and how far the weights of each model moved while it was"
+	       " learning, the middle of %d seeds\n\n", seeds);
+
+	printf("  %8s", "the games");
+	for (int scheme = 0; scheme < count; scheme++) printf(" %14s", names[scheme]);
+	printf("\n");
+
+	for (int budget = 0; budget < budgets_count; budget++) {
+		printf("  %8d", budgets[budget]);
+
+		for (int scheme = 0; scheme < count; scheme++) {
+			double moves[ANALYSIS_MAX_SEEDS];
+			double middle, lowest, highest;
+
+			for (int seed = 0; seed < seeds; seed++)
+				moves[seed] = curves[scheme].movement[budget][seed].all;
+
+			summarise(moves, seeds, &middle, &lowest, &highest);
+			printf(" %14.5f", middle);
+		}
 
 		printf("\n");
 	}
@@ -965,6 +1092,7 @@ static void run_the_nim_investigation(const game_t *game, const oracle_t *oracle
 	show_the_curve_of_learning(game, oracle);
 	show_the_representation(oracle);
 	show_the_curve_of_each_representation(oracle);
+	show_the_ways_of_starting_off(game, oracle);
 }
 
 int main(int argc, char *argv[], char *env[]) {
