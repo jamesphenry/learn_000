@@ -499,7 +499,8 @@ static void run_the_duel(const game_t *game, const oracle_t *oracle)
  * out of it, and they do not agree: how well a model learned, how well it
  * did in the league, and how well it did against models of the other kind.
  */
-static void run_the_league(const game_t *game, const oracle_t *oracle, int models)
+static void run_the_league(const game_t *game, const oracle_t *oracle,
+                           const char *name, int models)
 {
 	arena_settings_t settings;
 	arena_league_t league;
@@ -508,7 +509,7 @@ static void run_the_league(const game_t *game, const oracle_t *oracle, int model
 	arena_settings_init(&settings);
 	settings.training_games = 20000;
 
-	printf("\nthe league\n");
+	printf("\nthe league of %s\n", name);
 	printf("  %d models, %d games of training each, %d games a match\n\n",
 	       models, settings.training_games, settings.match_games);
 
@@ -587,7 +588,7 @@ int main(int argc, char *argv[], char *env[]) {
 	run_the_duel(&game, &oracle);
 
 	printf("\n");
-	run_the_league(&game, &oracle, models);
+	run_the_league(&game, &oracle, "tic-tac-toe", models);
 
 	oracle_stop(&oracle);
 
@@ -614,6 +615,9 @@ int main(int argc, char *argv[], char *env[]) {
 
 	printf("\n");
 	run_the_arena(&game, &oracle);
+
+	printf("\n");
+	run_the_league(&game, &oracle, "Nim", models);
 
 	oracle_stop(&oracle);
 
