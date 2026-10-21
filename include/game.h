@@ -24,4 +24,7 @@ game_result_t game_result(const game_t *game);
 char game_turn(const game_t *game);
 game_result_t game_play(game_t *game, policy_t *x_policy, policy_t *o_policy);
 
+/* The board as it was before each of the moves that were played. */
+void game_positions(const game_t *game, board_t positions[CELL_COUNT]);
+
 #endif // GAME_H

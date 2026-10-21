@@ -322,6 +322,41 @@ static char *test_o_wants_the_other_end_of_the_scores(void)
 	return NULL;
 }
 
+/* At an infinite temperature every legal cell counts the same, so the
+ * policy plays at random. The evaluation uses it as its opponent. */
+static char *test_an_infinite_temperature_plays_at_random(void)
+{
+	network_t network;
+	policy_t policy;
+	board_t board;
+	board_cell_t move;
+	int seen[CELL_COUNT] = {0};
+
+	build_the_test_network(&network, CELL_CENTER);
+	policy_init(&policy, &network, 1, INFINITY);
+
+	/* with a mark on the board the cells score differently, so a policy
+	 * that obeyed the scores would always take the same cell */
+	board_init(&board);
+	place_mark(&board, CELL_TOP_LEFT, 'X');
+
+	for (int i = 0; i < 400; i++) {
+		policy_select_move(&policy, &board, &move);
+		seen[move]++;
+	}
+
+	int distinct = 0;
+	for (int cell = 0; cell < CELL_COUNT; cell++) {
+		if (seen[cell] > 0)
+			distinct++;
+	}
+
+	_it_should("pick more than one cell", distinct > 1);
+	_it_should("not always pick the same cell", seen[CELL_CENTER] < 400);
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	_run_test(test_it_picks_an_empty_cell);
@@ -335,6 +370,7 @@ static char *run_tests()
 	_run_test(test_a_hot_temperature_explores);
 	_run_test(test_a_cold_temperature_stays_with_the_best_cell);
 	_run_test(test_it_copes_with_very_large_scores);
+	_run_test(test_an_infinite_temperature_plays_at_random);
 	_run_test(test_null_arguments);
 
 	return NULL;

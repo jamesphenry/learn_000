@@ -1,0 +1,152 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include "test-runner.h"
+#include <stdbool.h>
+#include <string.h>
+
+#include "../src/board.c"
+#include "../src/evaluate.c"
+#include "../src/game.c"
+#include "../src/layer.c"
+#include "../src/network.c"
+#include "../src/neuron.c"
+#include "../src/policy.c"
+#include "../src/rng.c"
+
+static bool nearly_equal(double actual, double expected)
+{
+	double diff = actual > expected ? actual - expected : expected - actual;
+
+	return diff < 1e-9;
+}
+
+/* A network that has never been trained says a half for every cell. */
+static void build_the_test_network(network_t *network)
+{
+	network_init(network);
+	network_add_layer(network, CELL_COUNT, 2, ACTIVATION_CLAMP);
+	network_add_layer(network, 2, CELL_COUNT, ACTIVATION_SIGMOID);
+}
+
+static char *test_it_refuses_bad_arguments(void)
+{
+	network_t network;
+	evaluation_t result;
+
+	build_the_test_network(&network);
+
+	_it_should("refuse a null network", !evaluate_network(NULL, 1, 10, &result));
+	_it_should("refuse a null result", !evaluate_network(&network, 1, 10, NULL));
+	_it_should("refuse no games", !evaluate_network(&network, 1, 0, &result));
+
+	return NULL;
+}
+
+static char *test_it_counts_the_games(void)
+{
+	network_t network;
+	evaluation_t result;
+
+	build_the_test_network(&network);
+
+	evaluate_network(&network, 1, 40, &result);
+
+	_it_should("count the games", result.games == 40);
+	_it_should("count every game once",
+		result.wins + result.draws + result.losses == 40);
+	_it_should("take each colour the same number of times",
+		result.as_x == result.as_o && result.as_x == 20);
+	_it_should("count the wins in each colour",
+		result.wins == result.wins_as_x + result.wins_as_o);
+	_it_should("count the games X won",
+		result.x_wins + result.games - result.x_wins == result.games);
+	_it_should("count the moves that were played", result.moves > 0);
+	_it_should("win some of the games", result.wins > 0);
+	_it_should("lose some of the games", result.losses > 0);
+
+	return NULL;
+}
+
+static char *test_an_untrained_network_says_a_half(void)
+{
+	network_t network;
+	evaluation_t result;
+	int moves = 0;
+
+	build_the_test_network(&network);
+
+	evaluate_network(&network, 1, 40, &result);
+
+	for (int bucket = 0; bucket < EVALUATION_BUCKETS; bucket++)
+		moves += result.bucket_counts[bucket];
+
+	_it_should("count every move that was played", moves > 0);
+	_it_should("put them all in the middle band", result.bucket_counts[2] == moves);
+	_it_should("say a half for all of them", nearly_equal(result.bucket_predicted[2], 0.5));
+
+	/* the network answers with the chance that X wins, so the share of
+	 * moves where X won is what its probabilities are measured against */
+	_it_should("measure against the moves in the games X won",
+		nearly_equal(result.bucket_observed[2],
+		             (double)result.moves_in_x_wins / result.moves));
+
+	/* a half against a result of one or zero is a quarter out, every time */
+	_it_should("be a quarter out", nearly_equal(result.brier_score, 0.25));
+
+	return NULL;
+}
+
+static char *test_the_buckets_hold_the_observations(void)
+{
+	network_t network;
+	evaluation_t result;
+
+	build_the_test_network(&network);
+
+	evaluate_network(&network, 1, 40, &result);
+
+	for (int bucket = 0; bucket < EVALUATION_BUCKETS; bucket++) {
+		if (result.bucket_counts[bucket] == 0) continue;
+
+		_it_should("hold a probability", result.bucket_predicted[bucket] >= 0.0 &&
+			result.bucket_predicted[bucket] <= 1.0);
+		_it_should("hold a share", result.bucket_observed[bucket] >= 0.0 &&
+			result.bucket_observed[bucket] <= 1.0);
+	}
+
+	_it_should("have a brier score between nought and one",
+		result.brier_score >= 0.0 && result.brier_score <= 1.0);
+
+	return NULL;
+}
+
+static char *test_the_same_seed_gives_the_same_result(void)
+{
+	network_t network;
+	evaluation_t first;
+	evaluation_t second;
+
+	build_the_test_network(&network);
+
+	evaluate_network(&network, 99, 30, &first);
+	evaluate_network(&network, 99, 30, &second);
+
+	_it_should("give the same wins", first.wins == second.wins);
+	_it_should("give the same draws", first.draws == second.draws);
+	_it_should("give the same losses", first.losses == second.losses);
+	_it_should("give the same brier score", nearly_equal(first.brier_score, second.brier_score));
+
+	return NULL;
+}
+
+static char *run_tests()
+{
+	_run_test(test_it_refuses_bad_arguments);
+	_run_test(test_it_counts_the_games);
+	_run_test(test_an_untrained_network_says_a_half);
+	_run_test(test_the_buckets_hold_the_observations);
+	_run_test(test_the_same_seed_gives_the_same_result);
+
+	return NULL;
+}

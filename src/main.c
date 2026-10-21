@@ -4,6 +4,7 @@
 #include "board.h"
 #include "game.h"
 #include "network.h"
+#include "evaluate.h"
 #include "trainer.h"
 #include "policy.h"
 
@@ -233,6 +234,46 @@ static void train_a_network(void)
 	       before[CELL_TOP_RIGHT], after[CELL_TOP_RIGHT]);
 }
 
+static void measure_a_network(void)
+{
+	network_t network;
+	policy_t policy;
+	trainer_t trainer;
+	evaluation_t before;
+	evaluation_t after;
+
+	network_init(&network);
+	network_add_layer(&network, CELL_COUNT, 8, ACTIVATION_CLAMP);
+	network_add_layer(&network, 8, CELL_COUNT, ACTIVATION_SIGMOID);
+
+	for (int neuron = 0; neuron < network.layers[0].n_neurons; neuron++) {
+		for (int input = 0; input < network.layers[0].n_inputs; input++)
+			network.layers[0].weights[neuron][input] = 0.5;
+	}
+
+	policy_init(&policy, &network, 1, 0.3);
+	trainer_init(&trainer, &network, 0.05);
+
+	evaluate_network(&network, 1, 200, &before);
+	trainer_run(&trainer, &policy, 1000);
+	evaluate_network(&network, 1, 200, &after);
+
+	printf("\nagainst an opponent that plays at random, over %d games\n", after.games);
+	printf("  before training: won %d, drew %d, lost %d, and was out by %g\n",
+	       before.wins, before.draws, before.losses, before.brier_score);
+	printf("  after training:  won %d, drew %d, lost %d, and was out by %g\n",
+	       after.wins, after.draws, after.losses, after.brier_score);
+
+	printf("\nwhat it said, and how often X won:\n");
+	for (int bucket = 0; bucket < EVALUATION_BUCKETS; bucket++) {
+		if (after.bucket_counts[bucket] == 0) continue;
+
+		printf("  said %g, X won %g of the time, over %d moves\n",
+		       after.bucket_predicted[bucket], after.bucket_observed[bucket],
+		       after.bucket_counts[bucket]);
+	}
+}
+
 int main(int argc, char *argv[], char *env[]) {
 	UNUSED(argc);
 	UNUSED(argv);
@@ -247,6 +288,9 @@ int main(int argc, char *argv[], char *env[]) {
 
 	printf("\n");
 	train_a_network();
+
+	printf("\n");
+	measure_a_network();
 
 	return EXIT_SUCCESS;
 }

@@ -87,7 +87,7 @@ bool trainer_init(trainer_t *trainer, network_t *network, double learning_rate)
 bool trainer_train_game(trainer_t *trainer, const game_t *game)
 {
 	network_t *network;
-	game_t replay;
+	board_t positions[CELL_COUNT];
 	double target;
 	int last;
 
@@ -106,15 +106,10 @@ bool trainer_train_game(trainer_t *trainer, const game_t *game)
 
 	/* the game is played again from the start, so that every position is
 	 * seen as it was when the move was made */
-	game_init(&replay);
+	game_positions(game, positions);
 
-	for (int step = 0; step < game->moves; step++) {
-		board_cell_t action = game->history[step];
-
-		train_step(trainer, &replay.board, action, target);
-
-		if (!game_play_move(&replay, action)) break;
-	}
+	for (int step = 0; step < game->moves; step++)
+		train_step(trainer, &positions[step], game->history[step], target);
 
 	return true;
 }

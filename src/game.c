@@ -56,3 +56,16 @@ game_result_t game_play(game_t *game, policy_t *x_policy, policy_t *o_policy)
 
 	return game_result(game);
 }
+
+void game_positions(const game_t *game, board_t positions[CELL_COUNT])
+{
+	game_t replay;
+
+	game_init(&replay);
+
+	for (int step = 0; step < game->moves; step++) {
+		positions[step] = replay.board;
+
+		if (!game_play_move(&replay, game->history[step])) break;
+	}
+}
