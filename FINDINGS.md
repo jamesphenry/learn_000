@@ -8,11 +8,14 @@ question could be answered at all.
 Everything here is measured. Where a number appears it was produced by the
 code in this repository, and the way to reproduce it is given.
 
-One thing to keep in mind when reading it: the worth of a position used to
+Two things to keep in mind when reading it. The worth of a position used to
 mean "the chance that X wins it", and now it means "the chance that the
-player to move wins it". The figures in the next two sections were
-measured before that change and are marked where it matters; the arena's
-and the league's figures are the current ones.
+player to move wins it". And the worth a model gives away on a move used to
+be counted on a scale of nought to two, and now it is counted on a scale of
+nought to one. The figures in the first two sections were measured before
+those changes, with the first version of the model, and are left as they
+were: they are the record of what went wrong. Every other figure is the
+current one.
 
 ---
 
@@ -64,10 +67,10 @@ Replacing it with a rectified unit took the same task from 78% to 95%
 
 ### What the model became
 
-One number: the worth of the position to X. The policy looks one cell
-ahead and takes the best of them. The truth of a position can now be
-measured straight against what the perfect player knows about it, and the
-same task reaches 95% — and a model trained that way draws every game
+One number: the worth of the position to the player to move. The policy
+looks one move ahead and takes the best of them. The truth of a position can
+now be measured straight against what the perfect player knows about it, and
+the same task reaches 95% — and a model trained that way draws every game
 against the perfect player in both colours.
 
 ---
@@ -86,6 +89,9 @@ knew. The same model gave away:
 Nearly four times as much once the opponent was varied. The arena now
 reports both, because the gap between them is the difference between a
 model that knows the positions it has seen and one that knows the game.
+The model that wins the arena today gives away 0.102 a move against a
+player that plays at random, and 0.000 in the games it plays against
+itself.
 
 The round robin is what exposed it. A model that never lost a game to the
 perfect player was losing a third of its games to a random one — a
@@ -106,7 +112,7 @@ Every weight and bias at zero. The gradient that would reach the hidden
 layer is multiplied by the hidden values, and those are zero, so nothing
 below the output layer ever moves. The model can learn a constant and
 nothing else. It gives away the same worth whether it has trained or not,
-and it draws twenty one games out of two hundred against the perfect
+and it draws about twenty games out of two hundred against the perfect
 player — the same as a player that had never heard of the game.
 
 ### Random: learns the game
@@ -116,9 +122,9 @@ and the hidden sums gather around zero. The output's sum starts between 0.2
 and 0.7, the sigmoid is nowhere near pinned, and the pull towards a winning
 target is 0.38 — nearly as much as the pull towards a losing one.
 
-It drew 974 games out of a thousand against the perfect player, lost 26,
-and beat the model that started with every mark the same value in every
-single game of the round robin.
+It draws every game against the perfect player, and beats the model that
+started with every mark the same value in every single game of the round
+robin.
 
 ### Maximum: cannot learn from a win
 
@@ -126,12 +132,12 @@ Every weight and bias at the same value of 1.0. Two things go wrong at once,
 and they can be told apart.
 
 **The size.** The hidden sums all come to 1.00, and the output's sum comes
-to **33**. The sigmoid is pinned at one, so the gradient towards a winning
+to **17**. The sigmoid is pinned at one, so the gradient towards a winning
 target is **exactly zero**. The model cannot learn from a single win. It
 can learn from losses, though — the pull towards a losing target is 1.00 —
 so it settles into believing that every position is a loss, which is
-exactly what it does: it drew none of a thousand games against the perfect
-player and lost every one.
+exactly what it does: it drew sixty two games out of six hundred against
+the perfect player and lost the rest.
 
 **The sameness.** Every hidden unit sees the same thing, so the hidden layer
 cannot tell one position from another.
@@ -143,13 +149,13 @@ plays at random:
 
 | started | out by the truth | gave away a move | against the perfect player |
 |---|---|---|---|
-| zero | 0.285 | 0.586 | 63 drawn, 537 lost |
-| varied, small (0.05) | 0.104 | 0.218 | 496 drawn, 104 lost |
-| **varied, medium (0.5)** | **0.085** | **0.192** | **600 drawn, 0 lost** |
-| varied, big (1.0) | 0.079 | 0.196 | 565 drawn, 35 lost |
-| all the same, small (0.05) | 0.211 | 0.315 | 0 drawn, 600 lost |
-| all the same, medium (0.5) | 0.233 | 0.442 | 0 drawn, 600 lost |
-| all the same, big (1.0) | 0.213 | 0.366 | 0 drawn, 600 lost |
+| zero | 0.280 | 0.281 | 0 won, 61 drawn, 539 lost |
+| varied, small (0.05) | 0.109 | 0.130 | 0 won, 540 drawn, 60 lost |
+| **varied, medium (0.5)** | **0.090** | **0.096** | **0 won, 600 drawn, 0 lost** |
+| varied, big (1.0) | 0.100 | 0.112 | 0 won, 600 drawn, 0 lost |
+| all the same, small (0.05) | 0.229 | 0.260 | 0 won, 99 drawn, 501 lost |
+| all the same, medium (0.5) | 0.233 | 0.207 | 0 won, 12 drawn, 588 lost |
+| all the same, big (1.0) | 0.228 | 0.223 | 0 won, 62 drawn, 538 lost |
 
 Three runs each, twenty thousand games each, the same conditions for every
 one of them.
@@ -203,27 +209,30 @@ they meet three times.
 | | seed 42 | seed 1978 |
 |---|---|---|
 | **before either has learned anything** | | |
-| gave away a move | 0.583 | 0.583 |
-| out by the truth | 0.263 | 0.263 |
+| gave away a move | 0.269 | 0.175 |
+| out by the truth | 0.340 | 0.220 |
 | drew with the perfect player | 0 | 100 |
+| lost to the perfect player | 200 | 100 |
 | seed 42 won | 100 | 100 |
 | the games were drawn | 0 | 0 |
 | **after each has learned from its own games** | | |
-| gave away a move | 0.216 | 0.208 |
+| gave away a move | 0.108 | 0.104 |
 | out by the truth | 0.203 | 0.141 |
 | drew with the perfect player | 200 | 200 |
+| lost to the perfect player | 0 | 0 |
 | seed 42 won | 0 | 100 |
 | the games were drawn | 100 | 100 |
 | **after they have learned against each other** | | |
-| gave away a move | 0.324 | 0.245 |
+| gave away a move | 0.162 | 0.123 |
 | out by the truth | 0.231 | 0.189 |
 | drew with the perfect player | 100 | 200 |
+| lost to the perfect player | 100 | 0 |
 | seed 42 won | 19 | 8 |
 | the games were drawn | 173 | 173 |
 
 **A model does learn without being told the answers.** Over fifty thousand
-games of its own the truth error fell from 0.26 to 0.20 and the worth it
-gave away fell from 0.58 to 0.22. It is well short of the model the
+games of its own the truth error fell from 0.34 to 0.20 and the worth it
+gave away fell from 0.27 to 0.11. It is well short of the model the
 perfect player taught, which draws every game against the perfect player,
 but it is a long way from the model that had learned nothing.
 
@@ -234,17 +243,69 @@ always won it. Two different starting points, the same game.
 
 **Learning against each other afterwards adds nothing.** The truth error
 gets *worse* rather than better — 0.20 becomes 0.23 and 0.14 becomes
-0.19 — and so does the worth given away: 0.22 becomes 0.32. Fifty
+0.19 — and so does the worth given away: 0.11 becomes 0.16. Fifty
 thousand games of learning one opponent instead of the game is not the
 same as fifty thousand games of learning the game, and the measurement
 says so.
 
 ---
 
-## 5. The answers to the questions in the notes
+## 5. The second game, and what it found
+
+The notes ask for a second game, to show that the abstractions are reusable
+rather than tic-tac-toe with a different coat on. Nim is a good one to try,
+because it is nothing like tic-tac-toe: the heaps do not belong to a
+player, there are no draws, and the perfect player knows a position is worth
+one or nought and never a half.
+
+The framework knows nothing about Nim. The game says what a position is
+worth to the player to move, the policy asks what each move would leave
+behind, and the same arena builds the same three models and measures them
+the same way.
+
+The grid of initialisations, over three runs each, twenty thousand games
+each, exactly as in the section above:
+
+| started | out by the truth | gave away a move | against the perfect player |
+|---|---|---|---|
+| zero | 0.208 | 0.613 | 0 won, 0 drawn, 600 lost |
+| varied, small (0.05) | 0.168 | 0.227 | 251 won, 0 drawn, 349 lost |
+| **varied, medium (0.5)** | **0.072** | **0.147** | **300 won, 0 drawn, 300 lost** |
+| varied, big (1.0) | 0.107 | 0.168 | 300 won, 0 drawn, 300 lost |
+| all the same, small (0.05) | 0.233 | 0.540 | 0 won, 0 drawn, 600 lost |
+| all the same, medium (0.5) | 0.234 | 0.541 | 0 won, 0 drawn, 600 lost |
+| all the same, big (1.0) | 0.217 | 0.580 | 0 won, 0 drawn, 600 lost |
+
+**The answer is the same in the second game.** The varied initialisation
+wins, the zeroed one never learns, and every initialisation that gives the
+units the same value fails completely — with one interesting difference: in
+Nim the failure is worse. The zeroed model gives away 0.613 a move against
+a random player, where in tic-tac-toe it gives away 0.281, because a game
+of Nim has more ways to be lost than a game of tic-tac-toe has.
+
+**The models that learn Nim learn it properly.** The best of them wins every
+game it starts and loses every game it does not, against a perfect player
+that cannot lose: three hundred won, three hundred lost, and no draws,
+because a game of Nim cannot be drawn. That is the perfect game, played
+perfectly.
+
+**The second game found a fault in the first game's perfect player.** The
+perfect player for Nim had no move to offer in a position it could not win,
+so the game stopped there and was counted as a draw — half of the games
+against the perfect player were being counted as draws, in a game that
+cannot be drawn. The perfect player now takes a stone when there is no move
+that wins, which is as good as any other move in a position that is lost
+anyway. The tic-tac-toe perfect player was never asked that question,
+because in tic-tac-toe every position that is not won is drawn, and there
+is always a move to make.
+
+---
+
+## 6. The answers to the questions in the notes
 
 **Which initialisation learns the game best?** Random. It is the only one
-that learns, and it wins the round robin in five runs out of five.
+that learns, and it wins the round robin in five runs out of five — in
+tic-tac-toe and in Nim alike.
 
 **Does the zeroed model reveal something fundamental about the training
 algorithm?** Yes, and the model with every weight the same reveals it more
@@ -270,16 +331,16 @@ model, because the faults are in the positions it never reaches.
 
 ---
 
-## 6. What is still open
+## 7. What is still open
 
 **The self-play teacher.** Its target is the result of the game under the
 model's own current play, so it chases a moving target. Fifty thousand
-games of it take the truth error from 0.34 to 0.21 and draw about forty
-games in a hundred against the perfect player, where the perfect player's
-own teaching reaches 200 out of 200 after ten thousand. A bootstrapped
-target — the worth of the position after the move, taken from the model's
-own estimates — was tried with the old shape of the model and stalled at
-60%; it has not been tried with the current one.
+games of it take the truth error from 0.34 to 0.20 and draw every game
+against the perfect player, where the perfect player's own teaching reaches
+the same place after ten thousand. A bootstrapped target — the worth of the
+position after the move, taken from the model's own estimates — was tried
+with the old shape of the model and stalled at 60%; it has not been tried
+with the current one.
 
 **Learning from games against a fixed opponent.** The duel shows what
 happens when two models spend their games on each other: they get good at
@@ -291,7 +352,8 @@ visits. With enough games it covers the game well enough to play it
 perfectly against a perfect opponent, but it is still worse than a random
 player in the positions it has not seen.
 
-**The framework.** The notes want tic-tac-toe moved into `games/` and a
-second game to show the abstractions are genuinely reusable. The
-game-to-feature conversion is already separate from the neural network,
-which was the first step on that list.
+**A league for the second game.** The league of a hundred models has been
+run for tic-tac-toe, and it produces three rankings that do not agree. The
+same league for Nim has not been run, and the question it would answer is
+whether the disagreement is a fact about the games or a fact about
+tic-tac-toe.
