@@ -41,7 +41,7 @@ static int minimax_turn(const int cells[MINIMAX_CELLS])
 }
 
 /* The player who has won, or MINIMAX_EMPTY if nobody has. */
-static int minimax_winner(const int cells[MINIMAX_CELLS])
+static int minimax_winner_of(const int cells[MINIMAX_CELLS])
 {
 	for (int line = 0; line < 8; line++) {
 		int first = cells[minimax_lines[line][0]];
@@ -77,7 +77,7 @@ static int minimax_score(int cells[MINIMAX_CELLS], int turn, int *values)
 
 	if (values[index] != 0) return values[index] - 2;
 
-	int winner = minimax_winner(cells);
+	int winner = minimax_winner_of(cells);
 	int best = -2;
 	int other = (turn == MINIMAX_X) ? MINIMAX_O : MINIMAX_X;
 
@@ -104,6 +104,20 @@ static int minimax_score(int cells[MINIMAX_CELLS], int turn, int *values)
 	return best;
 }
 
+char minimax_winner(const board_t *board)
+{
+	int cells[MINIMAX_CELLS];
+	int winner;
+
+	minimax_read(board, cells);
+	winner = minimax_winner_of(cells);
+
+	if (winner == MINIMAX_X) return 'X';
+	if (winner == MINIMAX_O) return 'O';
+
+	return 0;
+}
+
 minimax_result_t minimax_at(const board_t *board)
 {
 	int cells[MINIMAX_CELLS];
@@ -113,7 +127,7 @@ minimax_result_t minimax_at(const board_t *board)
 
 	minimax_read(board, cells);
 	turn = minimax_turn(cells);
-	winner = minimax_winner(cells);
+	winner = minimax_winner_of(cells);
 
 	if (winner != MINIMAX_EMPTY) {
 		result.value = (winner == turn) ? 1 : -1;

@@ -3,6 +3,7 @@
 #include "main.h"
 #include "board.h"
 #include "game.h"
+#include "judge.h"
 #include "minimax.h"
 #include "network.h"
 #include "evaluate.h"
@@ -298,6 +299,31 @@ static void ask_the_minimax(void)
 	printf("  so X wins with a certainty of %g\n", minimax_x_win_chance(&board));
 }
 
+/*
+ * A referee, looking at a game in which a move was not allowed.
+ */
+static void judge_a_game(void)
+{
+	game_t game;
+	judgement_t verdict;
+
+	game_init(&game);
+	game_play_move(&game, CELL_TOP_LEFT);
+	game_play_move(&game, CELL_CENTER);
+
+	/* the top left is taken, so this one is not allowed */
+	game_play_move(&game, CELL_TOP_LEFT);
+
+	judge_game(&game, &verdict);
+
+	printf("\nthe referee looked over a game\n");
+	printf("  %d moves were offered and %d of them were played\n",
+	       verdict.attempts, verdict.moves);
+	printf("  %d of the moves should not have been allowed\n", verdict.unexpected);
+	printf("  the two reckonings of the result %s\n",
+	       verdict.result_wrong ? "disagree" : "agree");
+}
+
 int main(int argc, char *argv[], char *env[]) {
 	UNUSED(argc);
 	UNUSED(argv);
@@ -318,6 +344,9 @@ int main(int argc, char *argv[], char *env[]) {
 
 	printf("\n");
 	ask_the_minimax();
+
+	printf("\n");
+	judge_a_game();
 
 	return EXIT_SUCCESS;
 }

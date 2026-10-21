@@ -4,6 +4,7 @@ void game_init(game_t *game)
 {
 	board_init(&game->board);
 	game->moves = 0;
+	game->attempt_count = 0;
 }
 
 char game_turn(const game_t *game)
@@ -13,6 +14,12 @@ char game_turn(const game_t *game)
 
 bool game_play_move(game_t *game, board_cell_t cell)
 {
+	/* the move is written down whether it was allowed or not, so that a
+	 * referee can see it */
+	if (game->attempt_count < GAME_MAX_ATTEMPTS)
+		game->attempts[game->attempt_count] = cell;
+	game->attempt_count++;
+
 	if (game_is_over(game)) return false;
 
 	if (!place_mark(&game->board, cell, game->board.current_player))

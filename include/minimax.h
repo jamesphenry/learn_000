@@ -22,6 +22,12 @@ typedef struct {
 minimax_result_t minimax_at(const board_t *board);
 
 /*
+ * Who has won: 'X', 'O', or 0 if nobody has. Worked out by the minimax's
+ * own reckoning, so that it can be compared with the board module's.
+ */
+char minimax_winner(const board_t *board);
+
+/*
  * The chance that X wins from this position if both play perfectly: one, a
  * half or nought.
  */

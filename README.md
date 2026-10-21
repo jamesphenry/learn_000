@@ -84,6 +84,7 @@ learn_000
 │   ├── board.h
 │   ├── evaluate.h
 │   ├── game.h
+│   ├── judge.h
 │   ├── layer.h
 │   ├── main.h
 │   ├── minimax.h
@@ -97,6 +98,7 @@ learn_000
 │   ├── board.c
 │   ├── evaluate.c
 │   ├── game.c
+│   ├── judge.c
 │   ├── layer.c
 │   ├── main.c
 │   ├── minimax.c
@@ -110,6 +112,7 @@ learn_000
 │   ├── board.test.c
 │   ├── evaluate.test.c
 │   ├── game.test.c
+│   ├── judge.test.c
 │   ├── layer.test.c
 │   ├── main.test.c
 │   ├── minimax.test.c

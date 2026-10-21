@@ -11,10 +11,17 @@ typedef enum {
 	GAME_DRAW
 } game_result_t;
 
+/* How many moves may be offered for a game. A game takes nine, and the
+ * rest are room for the ones that were not allowed. */
+#define GAME_MAX_ATTEMPTS 16
+
 typedef struct {
 	board_t board;
 	int moves;
 	board_cell_t history[CELL_COUNT];
+	/* every move that was offered, whether it was allowed or not */
+	board_cell_t attempts[GAME_MAX_ATTEMPTS];
+	int attempt_count;
 } game_t;
 
 void game_init(game_t *game);
