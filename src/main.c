@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "main.h"
+#include "arena.h"
 #include "board.h"
 #include "game.h"
 #include "judge.h"
@@ -324,6 +325,34 @@ static void judge_a_game(void)
 	       verdict.result_wrong ? "disagree" : "agree");
 }
 
+/*
+ * The three models, started off in the three ways, given the same games
+ * and the same number of training steps, and measured on games they have
+ * not seen.
+ */
+static void run_the_arena(void)
+{
+	arena_settings_t settings;
+	arena_result_t result;
+	const char *names[3] = { "zero", "random", "maximum" };
+
+	arena_settings_init(&settings);
+
+	printf("\nthe training arena\n");
+	printf("  %d games to learn from, %d to measure with\n\n",
+	       settings.training_games, settings.evaluation_games);
+	printf("  %-8s %12s %12s   %s\n", "started", "won before", "won after",
+	       "out by the truth");
+
+	for (int scheme = 0; scheme < 3; scheme++) {
+		if (!arena_run(&settings, (init_scheme_t)scheme, &result)) continue;
+
+		printf("  %-8s %11.1f%% %11.1f%%   %.3f -> %.3f\n", names[scheme],
+		       result.win_rate_before, result.win_rate_after,
+		       result.truth_before, result.truth_after);
+	}
+}
+
 int main(int argc, char *argv[], char *env[]) {
 	UNUSED(argc);
 	UNUSED(argv);
@@ -347,6 +376,9 @@ int main(int argc, char *argv[], char *env[]) {
 
 	printf("\n");
 	judge_a_game();
+
+	printf("\n");
+	run_the_arena();
 
 	return EXIT_SUCCESS;
 }

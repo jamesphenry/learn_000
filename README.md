@@ -81,6 +81,7 @@ make clean
 ```
 learn_000
 ├── include
+│   ├── arena.h
 │   ├── board.h
 │   ├── evaluate.h
 │   ├── game.h
@@ -95,6 +96,7 @@ learn_000
 │   ├── trainer.h
 │   └── ...
 ├── src
+│   ├── arena.c
 │   ├── board.c
 │   ├── evaluate.c
 │   ├── game.c
@@ -109,6 +111,7 @@ learn_000
 │   ├── trainer.c
 │   └── ...
 ├── test
+│   ├── arena.test.c
 │   ├── board.test.c
 │   ├── evaluate.test.c
 │   ├── game.test.c
@@ -117,6 +120,7 @@ learn_000
 │   ├── main.test.c
 │   ├── minimax.test.c
 │   ├── network.test.c
+│   ├── network_init.test.c
 │   ├── neuron.test.c
 │   ├── policy.test.c
 │   ├── rng.test.c
