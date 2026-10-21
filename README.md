@@ -214,7 +214,10 @@ learn_000
 │       ├── src/board.c
 │       ├── src/minimax.c
 │       ├── src/tictactoe.c
-│       └── test/tictactoe.test.c
+│       └── test
+│           ├── board.test.c
+│           ├── minimax.test.c
+│           └── tictactoe.test.c
 ├── test
 │   ├── test-runner
 │   └── *.test.c
