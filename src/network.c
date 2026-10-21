@@ -42,6 +42,41 @@ bool network_add_layer(network_t *network, int n_inputs, int n_neurons,
 	return true;
 }
 
+bool network_fill_random(network_t *network, rng_t *rng, double scale)
+{
+	if (network == NULL || rng == NULL) return false;
+
+	for (int layer = 0; layer < network->n_layers; layer++) {
+		for (int neuron = 0; neuron < network->layers[layer].n_neurons; neuron++) {
+			network->layers[layer].biases[neuron] =
+				(rng_next_double(rng) * 2.0 - 1.0) * scale;
+
+			for (int input = 0; input < network->layers[layer].n_inputs; input++) {
+				network->layers[layer].weights[neuron][input] =
+					(rng_next_double(rng) * 2.0 - 1.0) * scale;
+			}
+		}
+	}
+
+	return true;
+}
+
+bool network_fill_maximum(network_t *network, double value)
+{
+	if (network == NULL) return false;
+
+	for (int layer = 0; layer < network->n_layers; layer++) {
+		for (int neuron = 0; neuron < network->layers[layer].n_neurons; neuron++) {
+			network->layers[layer].biases[neuron] = value;
+
+			for (int input = 0; input < network->layers[layer].n_inputs; input++)
+				network->layers[layer].weights[neuron][input] = value;
+		}
+	}
+
+	return true;
+}
+
 bool network_forward(const network_t *network, const double *inputs, size_t n_inputs,
                      double *outputs, size_t n_outputs)
 {

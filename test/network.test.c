@@ -13,6 +13,7 @@
 #include "../src/board.c"
 #include "../src/layer.c"
 #include "../src/network.c"
+#include "../src/rng.c"
 #include "../src/neuron.c"
 
 static bool nearly_equal(double actual, double expected)
