@@ -4,7 +4,8 @@
 /* What a neuron does with its sum. */
 typedef enum {
 	ACTIVATION_CLAMP,
-	ACTIVATION_SIGMOID
+	ACTIVATION_SIGMOID,
+	ACTIVATION_RELU
 } activation_t;
 
 /*
@@ -46,6 +47,19 @@ double neuron_clamp(double value);
  * answer with less than a half.
  */
 double neuron_sigmoid(double value);
+
+/*
+ * The activation of a neuron that throws the negative half away:
+ *
+ *     value < 0 ? 0 : value
+ *
+ * The opponent's marks are still seen by the weights, which can be
+ * negative, so nothing is lost by throwing the negative half of the sum
+ * away. What it buys is a sharper unit: the clamp passes everything
+ * above its floor on unchanged, which leaves the layer above it with
+ * very little to tell one position from another.
+ */
+double neuron_relu(double value);
 
 /* The activation, chosen by name. */
 double neuron_activate(double value, activation_t activation);

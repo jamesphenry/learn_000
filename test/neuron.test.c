@@ -255,12 +255,30 @@ static char *test_sigmoid(void)
 	return NULL;
 }
 
+static char *test_relu(void)
+{
+	_it_should("leave a positive value unchanged",
+		nearly_equal(neuron_relu(3.5), 3.5));
+	_it_should("leave zero at zero",
+		nearly_equal(neuron_relu(0.0), 0.0));
+	_it_should("turn a negative value into zero",
+		nearly_equal(neuron_relu(-2.5), 0.0));
+	_it_should("leave a small negative value alone",
+		nearly_equal(neuron_relu(-0.0001), 0.0));
+
+	return NULL;
+}
+
 static char *test_activate(void)
 {
 	_it_should("use the clamp when asked for it",
 		nearly_equal(neuron_activate(-2.5, ACTIVATION_CLAMP), NEURON_FLOOR));
 	_it_should("use the sigmoid when asked for it",
 		nearly_equal(neuron_activate(0.0, ACTIVATION_SIGMOID), 0.5));
+	_it_should("use the relu when asked for it",
+		nearly_equal(neuron_activate(-2.5, ACTIVATION_RELU), 0.0));
+	_it_should("use the relu for a positive value",
+		nearly_equal(neuron_activate(2.5, ACTIVATION_RELU), 2.5));
 
 	return NULL;
 }
@@ -273,6 +291,12 @@ static char *test_derivative(void)
 	_it_should("be one just above the floor", nearly_equal(neuron_derivative(-0.5, ACTIVATION_CLAMP), 1.0));
 	_it_should("be a quarter in the middle of a sigmoid",
 		nearly_equal(neuron_derivative(0.0, ACTIVATION_SIGMOID), 0.25));
+	_it_should("be one above zero for a relu",
+		nearly_equal(neuron_derivative(0.5, ACTIVATION_RELU), 1.0));
+	_it_should("be zero below zero for a relu",
+		nearly_equal(neuron_derivative(-0.5, ACTIVATION_RELU), 0.0));
+	_it_should("be zero at zero for a relu",
+		nearly_equal(neuron_derivative(0.0, ACTIVATION_RELU), 0.0));
 
 	return NULL;
 }
@@ -290,6 +314,7 @@ static char *run_tests()
 	_run_test(test_fractional_values);
 	_run_test(test_rounding);
 	_run_test(test_clamp);
+	_run_test(test_relu);
 	_run_test(test_sigmoid);
 	_run_test(test_activate);
 	_run_test(test_derivative);
