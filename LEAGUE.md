@@ -54,122 +54,110 @@ which builds the league and prints the three rankings. The league itself is
 ## The results
 
 ```
-the average model moves 12.1 places when the league decides instead of the training
-and 14.8 places when the models of the other kind decide
+the average model moves 27.0 places when the league decides instead of the training
+and 20.6 places when the models of the other kind decide
 
 the leader of each ranking
   ranking        seed   taught   training     league
-  training          9    truth      0.000      29378
-  league           59    truth      0.000      32764
-  general          15    truth      0.000      30617
+  training          1    truth      0.000      21262
+  league           98     self      0.000      23627
+  general           1    truth      0.000      21262
 
-the champion is model 58, with the seed 59, taught by the perfect player
-  6652 won, 12808 drawn, 340 lost, 32764 points
-  place by training: 11, by league: 1, by generalisation: 9, of 100
+the champion is model 97, with the seed 98, taught by its own games
+  2006 won, 17609 drawn, 185 lost, 23627 points
+  place by training: 65, by league: 1, by generalisation: 78, of 100
 ```
 
-Three models, three different verdicts. The champion of the league was
-**eleventh** by the training measure and **ninth** by the controlled test.
-The model the controlled test liked best, seed 15, was **twelfth** in the
-league. And the model that topped the training measure, seed 9, came
-**32nd** in the league.
+**The average model moves twenty-seven places** between the training
+ranking and the league ranking. The champion was **65th** by the training
+measure. The model that topped the training measure came **34th** in the
+league.
+
+And the champion is a model that taught *itself*.
 
 ## What it says
 
 ### The training measure cannot rank the models it ought to
 
-Twenty of the fifty models taught by the perfect player give away **nothing
-at all** in their own games — they play their own lines perfectly. Their
-training measure is exactly zero, all twenty of them, and the measure
-cannot separate them by so much as a hair.
+Forty-seven of the fifty models taught by the perfect player give away
+**nothing at all** in their own games — they play their own lines
+perfectly. Their training measure is exactly zero, all forty-seven of
+them, and the measure cannot separate them by so much as a hair. Nineteen
+of the fifty self-taught models are tied at zero too.
 
-The league separates all fifty, from the champion on 32,764 points to the
-last on 23,040. It took ninety-nine opponents and a million games to say
-what twenty thousand games of training could not.
+The league separates all hundred: the truth-taught models scored between
+20,056 and 23,256 points, the self-taught ones between 16,124 and 23,627.
+The champion is a self-taught model on 23,627.
+
+### The two kinds are not told apart by the league
+
+The truth-taught models took places 2 to 69 and the self-taught ones 1 to
+100. The champion came from the kind that was taught by nobody.
+
+That is the surprise. It is tempting to think the models taught by the
+perfect player are the better ones, and on the training measure they are:
+every one of the top three is truth-taught. But the league does not see it
+that way, and the reason is in the next section.
 
 ### Where the training measure does say something, the league disagrees
 
 The fifty models that learned from their own games are separated by the
-training measure, which runs from 0.061 to 0.444 of worth given away a
-move. And the league reorders them:
+training measure, and the league reorders them by **31.7 places** on
+average:
 
 | seed | by training | by the league | moved |
 |---|---|---|---|
-| 38 | 46 | 95 | down 49 |
-| 84 | 56 | 88 | down 32 |
-| 2 | 61 | 91 | down 30 |
-| 40 | 82 | 58 | up 24 |
-| 12 | 96 | 67 | up 29 |
-| 46 | 99 | 59 | up 40 |
+| 6 | 5 | 99 | down 94 |
+| 8 | 7 | 93 | down 86 |
+| 20 | 17 | 95 | down 78 |
+| 68 | 76 | 4 | up 72 |
+| 72 | 93 | 22 | up 71 |
+| 98 | 65 | 1 | up 64 |
 
-The average of the fifty moves **12.6 places**. The model that gave away
-the least worth while learning finished forty-second of the fifty in the
-league; the model that finished forty-sixth on that measure finished
-ninety-fifth.
+Seed 6 gave away almost nothing while learning and finished ninety-ninth
+of a hundred against opponents it had never met. Seed 68 was seventy-sixth
+by the training measure and finished fourth.
 
 Here the training measure really is telling the truth about something —
-these fifty models are properly separated by it — and the league still
-disagrees with it about most of them.
-
-(The fifty truth-taught models move an average of 11.7 places too, but that
-number means much less: twenty of them are tied at zero, so their places
-in the training ranking are arbitrary and the league has nothing to
-disagree with.)
+these models are properly separated by it — and the league still disagrees
+with it about most of them.
 
 ### The controlled test and the league do not agree either
 
-The two verdicts on the models are different, and both are about the same
-hundred models:
-
 | | by the league | by the controlled test |
 |---|---|---|
-| seed 59 | 1st | 9th |
-| seed 15 | 12th | 1st |
-| seed 19 | 25th | 48th |
-| seed 71 | 40th | **4th** |
-| seed 33 | 49th | **3rd** |
+| seed 98 | **1st** | 78th |
+| seed 1 | 34th | **1st** |
+| seed 6 | 99th | 89th |
+| seed 81 | 63rd | **5th** |
+| seed 12 | 57th | 100th |
 
-Seed 71 gave away 0.444 of worth a move while learning — the most of any
-model in the league — and it is the **fourth** best model in the
-controlled test, and fortieth in the league. Seed 33 was forty-eighth by
-training and third by the controlled test.
+The controlled test and the training measure agree with each other — both
+favour seed 1 — and the league disagrees with both. The champion is
+seventy-eighth on the controlled test.
 
-What the controlled test measures is narrow by construction: one fixed
-opponent of each kind, rather than ninety-nine varied ones. It cannot
-separate models of the same kind as finely as the league does — the
-truth-taught models earn between 496 and 971 points against the held-back
-models of the other kind, and the self-taught ones between 175 and 470.
-But it is a cleaner test of one thing, and it sometimes finds models the
-league does not.
+This is worth being careful about, because each measure is right about
+something. The controlled test is a fair comparison, but it is narrow: with
+the models this alike, only **five** of the truth-taught models took a
+different score against the held-back models of the other kind, and eight
+of the self-taught ones. A hundred models that all draw with each other
+cannot be told apart by one opponent.
 
-### The two kinds are not interchangeable
+The league asks a different question — not *can this model handle that
+one opponent* but *can it handle ninety-nine unfamiliar ones* — and it
+gives a different answer, because the two questions are different.
 
-A model taught by the perfect player and a model that learned from its own
-games are not opponents of the same kind, and the league says so plainly.
-The truth-taught models took the first fifty-one places and the
-self-taught ones the fiftieth to the hundredth, and the points say why —
-the truth-taught models scored between 23,040 and 32,764, the self-taught
-ones between 13,238 and 24,668.
-
-One place is given away at the boundary: a self-taught model finished
-fiftieth and a truth-taught model fifty-first, so even here the two kinds
-are not cleanly separated.
-
-Among the self-taught models the best by the training measure was seed 50
-and the best in the league was also seed 50. Among the truth-taught
-models the best by training was seed 9 and the best in the league was
-seed 59.
-
-## The thing worth taking away
+### The thing worth taking away
 
 A model that dominates its training opponents is not thereby good, and the
-gap between the two is not a small one. Seed 9 gave away nothing at all in
-the games it trained on — it could not lose to itself — and it finished
-32nd of a hundred against opponents it had never seen.
+gap between the two is not a small one: twenty-seven places on average, and
+the champion was sixty-fifth on the measure that says how well a model
+learned.
 
-And the other way round: seed 71 was the worst of the hundred on the
-training measure and fourth on the controlled test. Being bad at the game
-you have been practising is not the same as being bad at the game.
+Seed 1 gave away nothing at all in the games it trained on — it could not
+lose to itself — and it finished thirty-fourth of a hundred against
+opponents it had never met. Seed 6, fifth on that measure, finished
+ninety-ninth.
 
 This is the same finding as the narrow measurement in
 [FINDINGS.md](FINDINGS.md), arrived at from the other direction: a model
@@ -179,7 +167,7 @@ already knew, and nothing else.
 
 The three rankings are kept apart on purpose. The training measure says
 what happened while learning; the league says what the model can do
-against a variety of strangers; the controlled test says whether it can
-do it against one unfamiliar opponent of a kind it has never met. Only one
-of the three is a measurement of the model, and it is not the one that is
+against a variety of strangers; the controlled test says whether it can do
+it against one unfamiliar opponent of a kind it has never met. Only one of
+the three is a measurement of the model, and it is not the one that is
 easiest to take.

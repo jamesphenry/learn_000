@@ -99,15 +99,16 @@ their own games. It produces **three rankings that do not agree**:
 | league | how well does it perform against unfamiliar opponents? |
 | general | does its performance hold up against a different kind of model? |
 
-The champion was eleventh by the training measure and first by the league;
-the model that topped the training measure came thirty-second. The whole
-of it is written up in [LEAGUE.md](LEAGUE.md).
+**The average model moves twenty-seven places** between the training
+measure and the league. The champion was sixty-fifth by the training
+measure, the model that topped the training measure came thirty-fourth in
+the league, and the champion turned out to be a model that taught itself.
+The whole of it is written up in [LEAGUE.md](LEAGUE.md).
 
 The general ranking is a controlled test: four models are held back from
 the league and every model is measured against them, so the comparison is
-the same for everybody. It does not agree with the league either — the
-league's champion is ninth by it, and the model it likes best is only
-twelfth in the league.
+the same for everybody. It agrees with the training measure and disagrees
+with the league — the league's champion is seventy-eighth on it.
 
 ## Two models and nobody to tell them the answers
 
