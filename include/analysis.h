@@ -64,4 +64,38 @@ bool analysis_fixed_set(const game_t *game, const oracle_t *oracle,
                          const network_t *network, unsigned long long seed,
                          analysis_t *result);
 
+/* How many budgets a curve may hold, and how many seeds each of them is
+ * measured with. */
+#define ANALYSIS_MAX_BUDGETS 8
+#define ANALYSIS_MAX_SEEDS 8
+
+/*
+ * The curve of learning: how a model does on the fixed set as it learns more.
+ *
+ * Every budget is given to a model of its own, and every model is measured
+ * on the same positions, so that the curve is the same ground all the way
+ * along it.
+ */
+typedef struct {
+	/* how many budgets there are, and how many games each of them is */
+	int budgets;
+	int budget[ANALYSIS_MAX_BUDGETS];
+
+	/* how many seeds each budget was measured with */
+	int seeds;
+
+	/* the measurement for each budget and each seed */
+	analysis_t measure[ANALYSIS_MAX_BUDGETS][ANALYSIS_MAX_SEEDS];
+} analysis_curve_t;
+
+/*
+ * The curve of learning, on the fixed set of positions the game offers.
+ *
+ * The seed in the settings is the first of the seeds the curve is measured
+ * with: each seed is the one before it with one added to it.
+ */
+bool analysis_curve(const arena_settings_t *settings, const game_t *game,
+                    const oracle_t *oracle, const int *budgets, int budgets_count,
+                    int seeds, analysis_curve_t *curve);
+
 #endif // ANALYSIS_H

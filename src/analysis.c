@@ -160,3 +160,45 @@ bool analysis_fixed_set(const game_t *game, const oracle_t *oracle,
 
 	return true;
 }
+
+bool analysis_curve(const arena_settings_t *settings, const game_t *game,
+                    const oracle_t *oracle, const int *budgets, int budgets_count,
+                    int seeds, analysis_curve_t *curve)
+{
+	if (settings == NULL || game == NULL || oracle == NULL || budgets == NULL) return false;
+	if (curve == NULL) return false;
+	if (budgets_count < 1 || budgets_count > ANALYSIS_MAX_BUDGETS) return false;
+	if (seeds < 1 || seeds > ANALYSIS_MAX_SEEDS) return false;
+
+	memset(curve, 0, sizeof(*curve));
+
+	curve->budgets = budgets_count;
+	curve->seeds = seeds;
+
+	for (int budget = 0; budget < budgets_count; budget++) {
+		if (budgets[budget] < 0) return false;
+
+		curve->budget[budget] = budgets[budget];
+
+		for (int seed = 0; seed < seeds; seed++) {
+			arena_settings_t run = *settings;
+			network_t network;
+			rng_t rng;
+
+			/* each seed is the one before it with one added to it */
+			run.training_games = budgets[budget];
+			run.training_seed = settings->training_seed + (unsigned long long)seed;
+
+			rng_seed(&rng, run.training_seed);
+
+			if (!arena_train(&run, game, oracle, INIT_RANDOM, &rng, &network, NULL))
+				return false;
+
+			if (!analysis_fixed_set(game, oracle, &network, run.evaluation_seed,
+			                        &curve->measure[budget][seed]))
+				return false;
+		}
+	}
+
+	return true;
+}

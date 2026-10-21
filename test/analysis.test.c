@@ -6,12 +6,16 @@
 #include <string.h>
 
 #include "../src/analysis.c"
+#include "../src/arena.c"
+#include "../src/evaluate.c"
 #include "../src/game.c"
+#include "../src/judge.c"
 #include "../src/layer.c"
 #include "../src/network.c"
 #include "../src/neuron.c"
 #include "../src/policy.c"
 #include "../src/rng.c"
+#include "../src/trainer.c"
 #include "../games/nim/src/nim.c"
 
 static game_t game;
@@ -170,6 +174,74 @@ static char *test_a_model_that_calls_everything_a_loss_is_wrong_by_the_wins(void
 	return NULL;
 }
 
+/*
+ * The curve of learning: every budget is measured on the same positions, and
+ * the first point of the curve is the model the arena would teach with the
+ * same seed.
+ */
+static char *test_the_curve_measures_the_same_ground_all_the_way_along(void)
+{
+	arena_settings_t settings;
+	analysis_curve_t curve;
+	analysis_t direct;
+	network_t network;
+	rng_t rng;
+	int budgets[2] = { 0, 10 };
+
+	arena_settings_init(&settings);
+	settings.hidden_neurons = 4;
+	settings.training_games = 0;
+
+	_it_should("measure the curve",
+		analysis_curve(&settings, &game, &oracle, budgets, 2, 1, &curve));
+
+	_it_should("hold both budgets", curve.budgets == 2 && curve.budget[0] == 0 &&
+	                                      curve.budget[1] == 10);
+	_it_should("measure every position there is",
+		curve.measure[0][0].positions == NIM_MAX_POSITIONS);
+
+	/* and the model at the start of the curve is the model the arena
+	 * teaches with the same seed */
+	rng_seed(&rng, settings.training_seed);
+	arena_train(&settings, &game, &oracle, INIT_RANDOM, &rng, &network, NULL);
+	analysis_fixed_set(&game, &oracle, &network, settings.evaluation_seed, &direct);
+
+	_it_should("give the same error",
+		nearly_equal(curve.measure[0][0].truth_error, direct.truth_error));
+	_it_should("give the same mean worth",
+		nearly_equal(curve.measure[0][0].mean_worth, direct.mean_worth));
+	_it_should("play the same number of moves",
+		curve.measure[0][0].moves == direct.moves);
+
+	return NULL;
+}
+
+static char *test_the_curve_refuses_bad_arguments(void)
+{
+	arena_settings_t settings;
+	analysis_curve_t curve;
+	int budgets[2] = { 0, 10 };
+
+	arena_settings_init(&settings);
+
+	_it_should("refuse no settings",
+		!analysis_curve(NULL, &game, &oracle, budgets, 2, 1, &curve));
+	_it_should("refuse no game",
+		!analysis_curve(&settings, NULL, &oracle, budgets, 2, 1, &curve));
+	_it_should("refuse no perfect player",
+		!analysis_curve(&settings, &game, NULL, budgets, 2, 1, &curve));
+	_it_should("refuse no budgets",
+		!analysis_curve(&settings, &game, &oracle, NULL, 2, 1, &curve));
+	_it_should("refuse nowhere to put the curve",
+		!analysis_curve(&settings, &game, &oracle, budgets, 2, 1, NULL));
+	_it_should("refuse no seeds",
+		!analysis_curve(&settings, &game, &oracle, budgets, 2, 0, &curve));
+	_it_should("refuse more budgets than it can hold",
+		!analysis_curve(&settings, &game, &oracle, budgets, ANALYSIS_MAX_BUDGETS + 1, 1, &curve));
+
+	return NULL;
+}
+
 static char *run_tests(void)
 {
 	nim_game(&game);
@@ -180,6 +252,8 @@ static char *run_tests(void)
 	_run_test(test_a_model_that_says_nothing_is_half_way_off);
 	_run_test(test_a_model_that_calls_everything_a_loss_is_wrong_by_the_wins);
 	_run_test(test_it_measures_the_moves_too);
+	_run_test(test_the_curve_measures_the_same_ground_all_the_way_along);
+	_run_test(test_the_curve_refuses_bad_arguments);
 
 	return NULL;
 }

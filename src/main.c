@@ -653,6 +653,107 @@ static void trace_a_game(const game_t *game, const oracle_t *oracle,
 }
 
 /*
+ * The middle of a set of numbers, and the two ends of it.
+ */
+static void summarise(double *values, int count, double *middle, double *lowest,
+                      double *highest)
+{
+	*middle = 0.0;
+	*lowest = values[0];
+	*highest = values[0];
+
+	for (int i = 0; i < count; i++) {
+		*middle += values[i];
+		if (values[i] < *lowest) *lowest = values[i];
+		if (values[i] > *highest) *highest = values[i];
+	}
+
+	*middle /= count;
+}
+
+/*
+ * The curve of learning: how a model does on the fixed set as it learns more,
+ * taught by the perfect player and taught by nothing but the results of its
+ * own games. Every point of the curve is the middle of several seeds, with
+ * the two ends of them beside it.
+ */
+static void show_the_curve_of_learning(const game_t *game, const oracle_t *oracle)
+{
+	arena_settings_t settings;
+	analysis_curve_t truth;
+	analysis_curve_t self;
+	const int budgets[] = { 0, 1000, 2000, 5000, 10000, 20000 };
+	const int budgets_count = (int)(sizeof(budgets) / sizeof(budgets[0]));
+	const int seeds = 3;
+
+	arena_settings_init(&settings);
+	settings.learning = ARENA_LEARN_TRUTH;
+
+	if (!analysis_curve(&settings, game, oracle, budgets, budgets_count, seeds, &truth)) {
+		printf("\n  the curve of learning could not be measured\n");
+		return;
+	}
+
+	settings.learning = ARENA_LEARN_SELF;
+
+	if (!analysis_curve(&settings, game, oracle, budgets, budgets_count, seeds, &self)) {
+		printf("\n  the curve of learning could not be measured\n");
+		return;
+	}
+
+	printf("\n  the curve of learning, %d seeds a point, out by the truth\n",
+	       seeds);
+	printf("  %8s   %-30s %-30s\n", "games", "taught by the perfect player",
+	       "taught by its own games");
+	printf("  %8s   %9s %9s %9s %9s %9s %9s\n", "", "mean", "lowest", "highest",
+	       "mean", "lowest", "highest");
+
+	for (int budget = 0; budget < budgets_count; budget++) {
+		double taught[ANALYSIS_MAX_SEEDS];
+		double own[ANALYSIS_MAX_SEEDS];
+		double middle, lowest, highest;
+
+		for (int seed = 0; seed < seeds; seed++) {
+			taught[seed] = truth.measure[budget][seed].truth_error;
+			own[seed] = self.measure[budget][seed].truth_error;
+		}
+
+		summarise(taught, seeds, &middle, &lowest, &highest);
+		printf("  %8d   %9.3f %9.3f %9.3f", budgets[budget], middle, lowest, highest);
+
+		summarise(own, seeds, &middle, &lowest, &highest);
+		printf(" %9.3f %9.3f %9.3f\n", middle, lowest, highest);
+	}
+
+	printf("\n  and the moves that leave the opponent in a losing position, out"
+	       " of the %d positions the player to move can win\n",
+	       truth.measure[0][0].winning_positions);
+	printf("  %8s   %-30s %-30s\n", "games", "taught by the perfect player",
+	       "taught by its own games");
+	printf("  %8s   %9s %9s %9s %9s %9s %9s\n", "", "mean", "lowest", "highest",
+	       "mean", "lowest", "highest");
+
+	for (int budget = 0; budget < budgets_count; budget++) {
+		double taught[ANALYSIS_MAX_SEEDS];
+		double own[ANALYSIS_MAX_SEEDS];
+		double middle, lowest, highest;
+
+		for (int seed = 0; seed < seeds; seed++) {
+			taught[seed] = (double)truth.measure[budget][seed].winning_moves /
+			              truth.measure[budget][seed].winning_positions;
+			own[seed] = (double)self.measure[budget][seed].winning_moves /
+			            self.measure[budget][seed].winning_positions;
+		}
+
+		summarise(taught, seeds, &middle, &lowest, &highest);
+		printf("  %8d   %9.3f %9.3f %9.3f", budgets[budget], middle, lowest, highest);
+
+		summarise(own, seeds, &middle, &lowest, &highest);
+		printf(" %9.3f %9.3f %9.3f\n", middle, lowest, highest);
+	}
+}
+
+/*
  * The investigation of the model of Nim: what has it actually learned?
  *
  * The first part maps a game out move by move, so that the failure can be
@@ -698,10 +799,13 @@ static void run_the_nim_investigation(const game_t *game, const oracle_t *oracle
 	       measured.calls_win, measured.truth_wins);
 	printf("    it plays the best move         %d of %d\n",
 	       measured.best_moves, measured.moves);
+	printf("    it plays %d different moves over them\n", measured.distinct_moves);
 	printf("    it leaves the opponent lost    %d of the %d it can win\n",
 	       measured.winning_moves, measured.winning_positions);
 	printf("    it gives away                  %7.3f a move\n",
 	       measured.moves > 0 ? measured.value_lost / measured.moves : 0.0);
+
+	show_the_curve_of_learning(game, oracle);
 }
 
 int main(int argc, char *argv[], char *env[]) {
