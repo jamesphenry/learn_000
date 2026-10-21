@@ -2,6 +2,7 @@
 #include <string.h>
 #include "evaluate.h"
 #include "game.h"
+#include "minimax.h"
 #include "policy.h"
 
 /* At this temperature every legal cell ends up with the same weight, so
@@ -28,6 +29,7 @@ bool evaluate_network(const network_t *network, unsigned long long seed, int gam
 	board_t positions[CELL_COUNT];
 	double scores[CELL_COUNT];
 	double total = 0.0;
+	double truth_total = 0.0;
 	int moves = 0;
 
 	if (network == NULL || result == NULL || games < 1) return false;
@@ -94,6 +96,10 @@ bool evaluate_network(const network_t *network, unsigned long long seed, int gam
 			moves++;
 			result->moves++;
 
+			/* and how far the probability is from what the perfect
+			 * player knows the position to be worth */
+			truth_total += fabs(probability - minimax_x_win_chance(&positions[step]));
+
 			if (outcome == GAME_X_WINS) result->moves_in_x_wins++;
 		}
 	}
@@ -101,7 +107,10 @@ bool evaluate_network(const network_t *network, unsigned long long seed, int gam
 	result->games = games;
 	result->wins = result->wins_as_x + result->wins_as_o;
 
-	if (moves > 0) result->brier_score = total / moves;
+	if (moves > 0) {
+		result->brier_score = total / moves;
+		result->truth_error = truth_total / moves;
+	}
 
 	for (int bucket = 0; bucket < EVALUATION_BUCKETS; bucket++) {
 		if (result->bucket_counts[bucket] == 0) continue;

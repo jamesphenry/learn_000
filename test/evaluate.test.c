@@ -8,6 +8,7 @@
 #include "../src/board.c"
 #include "../src/evaluate.c"
 #include "../src/game.c"
+#include "../src/minimax.c"
 #include "../src/layer.c"
 #include "../src/network.c"
 #include "../src/neuron.c"
@@ -140,6 +141,71 @@ static char *test_the_same_seed_gives_the_same_result(void)
 	return NULL;
 }
 
+/*
+ * The same games played again, and the truth worked out for each position as
+ * it was when the move was made, to check the error against.
+ */
+static double expected_truth_error(void)
+{
+	network_t network;
+	policy_t network_policy;
+	policy_t random_policy;
+	double total = 0.0;
+	int moves = 0;
+
+	build_the_test_network(&network);
+	policy_init(&network_policy, &network, 1, 0.0);
+	policy_init(&random_policy, &network, 2, INFINITY);
+
+	for (int i = 0; i < 40; i++) {
+		game_t played;
+		board_t positions[CELL_COUNT];
+		double inputs[CELL_COUNT];
+		double scores[CELL_COUNT];
+
+		/* the network takes one colour and then the other, as it does in
+		 * the measurement */
+		if (i % 2 == 0)
+			game_play(&played, &network_policy, &random_policy);
+		else
+			game_play(&played, &random_policy, &network_policy);
+
+		game_positions(&played, positions);
+
+		for (int step = 0; step < played.moves; step++) {
+			board_to_inputs(&positions[step], inputs);
+			network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+
+			total += fabs(scores[played.history[step]] -
+			              minimax_x_win_chance(&positions[step]));
+			moves++;
+		}
+	}
+
+	return total / moves;
+}
+
+static char *test_the_truth_error_is_measured_against_the_perfect_player(void)
+{
+	network_t network;
+	evaluation_t result;
+
+	build_the_test_network(&network);
+
+	evaluate_network(&network, 1, 40, &result);
+
+	/* the network says a half for every cell, so it is out by a half
+	 * wherever the position was worth something else, and by nothing at
+	 * all wherever the position was a draw */
+	_it_should("be between nought and a half",
+		result.truth_error >= 0.0 && result.truth_error <= 0.5);
+	_it_should("be less than a half", result.truth_error < 0.5);
+	_it_should("be the error against the position as it was",
+		nearly_equal(result.truth_error, expected_truth_error()));
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	_run_test(test_it_refuses_bad_arguments);
@@ -147,6 +213,7 @@ static char *run_tests()
 	_run_test(test_an_untrained_network_says_a_half);
 	_run_test(test_the_buckets_hold_the_observations);
 	_run_test(test_the_same_seed_gives_the_same_result);
+	_run_test(test_the_truth_error_is_measured_against_the_perfect_player);
 
 	return NULL;
 }

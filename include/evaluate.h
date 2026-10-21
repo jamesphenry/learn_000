@@ -36,6 +36,12 @@ typedef struct {
 	/* How far the probabilities were from what happened, over every move
 	 * that was played: the mean of (probability - result) squared. */
 	double brier_score;
+	/* How far the probabilities are from what the perfect player knows the
+	 * position to be worth. This is not the same as the brier score: the
+	 * brier score asks whether the probabilities are honest about the games
+	 * that were played, and this asks whether they are right about the
+	 * position. It is exact, so it does not wander from seed to seed. */
+	double truth_error;
 	int bucket_counts[EVALUATION_BUCKETS];
 	double bucket_predicted[EVALUATION_BUCKETS];
 	double bucket_observed[EVALUATION_BUCKETS];
