@@ -291,6 +291,85 @@ static char *test_it_offers_positions_to_look_at(void)
 	return NULL;
 }
 
+static char *test_the_perfect_player_plays_on_when_it_cannot_win(void)
+{
+	game_position_t position;
+	game_move_t move;
+
+	oracle_start(&oracle);
+
+	/* the exclusive or of three, four and seven is zero, so the position is
+	 * a loss for the player to move */
+	position_with(&position, 3, 4, 7, 0);
+
+	move = oracle.choose(oracle.state, &position);
+
+	_it_should("have a move to make", move >= 0);
+	_it_should("and the move is allowed", game.play(&position, move));
+
+	oracle_stop(&oracle);
+
+	return NULL;
+}
+
+/*
+ * The move the perfect player plays, checked over every position there is:
+ * a position it can win is left as a loss for the opponent, and a position it
+ * cannot win is still played on.
+ */
+static char *test_the_move_is_right_in_every_position(void)
+{
+	int no_move = 0;
+	int wrong_move = 0;
+
+	oracle_start(&oracle);
+
+	for (int a = 0; a <= NIM_MAX_HEAP; a++) {
+		for (int b = 0; b <= NIM_MAX_HEAP; b++) {
+			for (int c = 0; c <= NIM_MAX_HEAP; c++) {
+				game_position_t position;
+				game_position_t after;
+				game_move_t move;
+				const nim_t *heaps;
+				int xor = a ^ b ^ c;
+
+				if (a + b + c == 0) continue;
+
+				position_with(&position, a, b, c, 0);
+
+				move = oracle.choose(oracle.state, &position);
+
+				if (move < 0) {
+					no_move++;
+					continue;
+				}
+
+				after = position;
+
+				if (!game.play(&after, move)) {
+					wrong_move++;
+					continue;
+				}
+
+				heaps = nim_state_of(&after);
+
+				/* the opponent is left in a position that is worth
+				 * nought, when there was one to leave */
+				if (xor != 0 &&
+				    (heaps->heaps[0] ^ heaps->heaps[1] ^ heaps->heaps[2]) != 0)
+					wrong_move++;
+			}
+		}
+	}
+
+	_it_should("always have a move to make", no_move == 0);
+	_it_should("always leave a position worth nought", wrong_move == 0);
+
+	oracle_stop(&oracle);
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	nim_game(&game);
@@ -303,6 +382,8 @@ static char *run_tests()
 	_run_test(test_the_features_are_the_sizes_of_the_heaps_as_a_fraction);
 	_run_test(test_the_perfect_player_knows_what_a_position_is_worth);
 	_run_test(test_the_perfect_player_leaves_a_position_that_is_worth_nothing);
+	_run_test(test_the_perfect_player_plays_on_when_it_cannot_win);
+	_run_test(test_the_move_is_right_in_every_position);
 	_run_test(test_the_rule_agrees_with_a_search);
 	_run_test(test_the_perfect_player_agrees_with_the_game);
 	_run_test(test_the_referee_finds_nothing_wrong);

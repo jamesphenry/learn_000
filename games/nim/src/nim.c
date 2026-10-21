@@ -205,6 +205,12 @@ static game_move_t nim_choose(void *state, const game_position_t *position)
 			return NIM_MOVE(heap, nim->heaps[heap] - left);
 	}
 
+	/* the position is a loss for the player to move, and every move is as
+	 * good as any other, so one is played anyway: the game goes on until
+	 * the stones are gone */
+	for (int heap = 0; heap < NIM_HEAPS; heap++)
+		if (nim->heaps[heap] > 0) return NIM_MOVE(heap, 1);
+
 	return -1;
 }
 
