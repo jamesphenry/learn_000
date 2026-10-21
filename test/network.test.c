@@ -513,6 +513,202 @@ static char *test_an_empty_board_gives_no_scores(void)
 	return NULL;
 }
 
+/*
+ * A network to experiment with. The first hidden neuron adds the first two
+ * cells together, the second one reads the third cell, and every output
+ * neuron reads both of them, so a change to a hidden value moves every
+ * score and a change to an output weight moves only one.
+ */
+static void build_the_experiment_network(network_t *network)
+{
+	network_init(network);
+	network_add_layer(network, CELL_COUNT, 2);
+	network->layers[0].weights[0][0] = 1.0;
+	network->layers[0].weights[0][1] = 1.0;
+	network->layers[0].weights[1][2] = 1.0;
+
+	network_add_layer(network, 2, CELL_COUNT);
+	for (int cell = 0; cell < CELL_COUNT; cell++) {
+		network->layers[1].weights[cell][0] = (double)(cell + 1);
+		network->layers[1].weights[cell][1] = 1.0;
+	}
+}
+
+/* X at the top left and the top middle, nothing else. */
+static void build_the_experiment_board(board_t *board)
+{
+	board_init(board);
+	place_mark(board, CELL_TOP_LEFT, 'X');
+	place_mark(board, CELL_TOP, 'X');
+}
+
+static char *test_changing_an_output_weight_moves_one_score(void)
+{
+	network_t network;
+	board_t board;
+	double inputs[CELL_COUNT];
+	double scores[CELL_COUNT];
+
+	build_the_experiment_board(&board);
+	build_the_experiment_network(&network);
+	board_to_inputs(&board, inputs);
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+
+	/* the hidden values are 2 and 0, so the scores are 2, 4, 6 and so on */
+	_it_should("start with the scores in step", nearly_equal(scores[3], 8.0));
+
+	/* the fourth output neuron reads the first hidden value with weight 4 */
+	network.layers[1].weights[3][0] = 10.0;
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+
+	_it_should("move only the score that reads the weight",
+		nearly_equal(scores[3], 20.0));
+	_it_should("leave the score before it alone", nearly_equal(scores[2], 6.0));
+	_it_should("leave the score after it alone", nearly_equal(scores[4], 10.0));
+	_it_should("leave the other scores alone", nearly_equal(scores[0], 2.0) &&
+		nearly_equal(scores[8], 18.0));
+
+	return NULL;
+}
+
+static char *test_changing_a_hidden_weight_moves_every_score(void)
+{
+	network_t network;
+	board_t board;
+	double inputs[CELL_COUNT];
+	double scores[CELL_COUNT];
+
+	build_the_experiment_board(&board);
+	build_the_experiment_network(&network);
+	board_to_inputs(&board, inputs);
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+
+	/* the first hidden neuron adds the first two cells, 1 + 1 = 2 */
+	network.layers[0].weights[0][1] = 3.0;
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+
+	/* now it adds 1 + 3 = 4, and every output reads it */
+	_it_should("move the first score", nearly_equal(scores[0], 4.0));
+	_it_should("move the last score", nearly_equal(scores[8], 36.0));
+
+	int all_moved = 1;
+	for (int cell = 0; cell < CELL_COUNT; cell++) {
+		if (!nearly_equal(scores[cell], (double)(cell + 1) * 4.0))
+			all_moved = 0;
+	}
+	_it_should("move every score", all_moved);
+
+	return NULL;
+}
+
+static char *test_changing_an_output_bias_moves_one_score(void)
+{
+	network_t network;
+	board_t board;
+	double inputs[CELL_COUNT];
+	double scores[CELL_COUNT];
+
+	build_the_experiment_board(&board);
+	build_the_experiment_network(&network);
+	board_to_inputs(&board, inputs);
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+
+	network.layers[1].biases[5] = 3.0;
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+
+	_it_should("move only the score that has the bias",
+		nearly_equal(scores[5], 15.0));
+	_it_should("leave the other scores alone", nearly_equal(scores[4], 10.0) &&
+		nearly_equal(scores[6], 14.0));
+
+	return NULL;
+}
+
+static char *test_changing_a_hidden_bias_moves_every_score(void)
+{
+	network_t network;
+	board_t board;
+	double inputs[CELL_COUNT];
+	double scores[CELL_COUNT];
+
+	build_the_experiment_board(&board);
+	build_the_experiment_network(&network);
+	board_to_inputs(&board, inputs);
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+
+	network.layers[0].biases[0] = 1.0;
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+
+	/* the first hidden value goes from 2 to 3, and every output reads it */
+	_it_should("move the first score", nearly_equal(scores[0], 3.0));
+	_it_should("move the last score", nearly_equal(scores[8], 27.0));
+
+	int all_moved = 1;
+	for (int cell = 0; cell < CELL_COUNT; cell++) {
+		if (!nearly_equal(scores[cell], (double)(cell + 1) * 3.0))
+			all_moved = 0;
+	}
+	_it_should("move every score", all_moved);
+
+	return NULL;
+}
+
+static char *test_the_same_network_on_a_different_board(void)
+{
+	network_t network;
+	board_t board;
+	double inputs[CELL_COUNT];
+	double scores[CELL_COUNT];
+
+	build_the_experiment_network(&network);
+
+	/* only the top left cell is taken, so the hidden value is 1 */
+	board_init(&board);
+	place_mark(&board, CELL_TOP_LEFT, 'X');
+	board_to_inputs(&board, inputs);
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+
+	_it_should("score in step with the new board", nearly_equal(scores[0], 1.0));
+	_it_should("score the last cell too", nearly_equal(scores[8], 9.0));
+
+	/* now the top middle cell is taken as well, so the hidden value is 2 */
+	place_mark(&board, CELL_TOP, 'X');
+	board_to_inputs(&board, inputs);
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+
+	_it_should("score in step with the fuller board", nearly_equal(scores[0], 2.0));
+	_it_should("score the last cell of it too", nearly_equal(scores[8], 18.0));
+
+	return NULL;
+}
+
+static char *test_an_opponent_mark_can_silence_the_network(void)
+{
+	network_t network;
+	board_t board;
+	double inputs[CELL_COUNT];
+	double scores[CELL_COUNT];
+
+	build_the_experiment_network(&network);
+
+	/* the top left is X and the top middle is O, so the hidden neuron adds
+	 * 1 and -1 together and the sum is zero */
+	board_init(&board);
+	place_mark(&board, CELL_TOP_LEFT, 'X');
+	place_mark(&board, CELL_TOP, 'O');
+	board_to_inputs(&board, inputs);
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+
+	int all_zero = 1;
+	for (int cell = 0; cell < CELL_COUNT; cell++) {
+		if (scores[cell] != 0.0)
+			all_zero = 0;
+	}
+	_it_should("give no score at all", all_zero);
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	_run_test(test_two_layers_compose);
@@ -527,6 +723,12 @@ static char *run_tests()
 	_run_test(test_network_forward_clamps_at_each_layer);
 	_run_test(test_network_forward_with_one_layer);
 	_run_test(test_the_board_feeds_a_network);
+	_run_test(test_changing_an_output_weight_moves_one_score);
+	_run_test(test_changing_a_hidden_weight_moves_every_score);
+	_run_test(test_changing_an_output_bias_moves_one_score);
+	_run_test(test_changing_a_hidden_bias_moves_every_score);
+	_run_test(test_the_same_network_on_a_different_board);
+	_run_test(test_an_opponent_mark_can_silence_the_network);
 	_run_test(test_a_real_board_gives_nine_scores);
 	_run_test(test_an_empty_board_gives_no_scores);
 	_run_test(test_network_forward_null_arguments);

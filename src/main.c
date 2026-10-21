@@ -57,6 +57,93 @@ static void score_a_game(void)
 	}
 }
 
+/*
+ * The network the tests use, one change at a time, to see how far each
+ * change reaches. The first hidden neuron adds the first two cells together
+ * and the second one reads the third cell, and every output neuron reads
+ * both of them, so a change to a hidden value moves every score and a change
+ * to an output weight moves only one. See test/network.test.c.
+ */
+static void build_the_experiment_network(network_t *network)
+{
+	network_init(network);
+	network_add_layer(network, CELL_COUNT, 2);
+	network->layers[0].weights[0][0] = 1.0;
+	network->layers[0].weights[0][1] = 1.0;
+	network->layers[0].weights[1][2] = 1.0;
+
+	network_add_layer(network, 2, CELL_COUNT);
+	for (int cell = 0; cell < CELL_COUNT; cell++) {
+		network->layers[1].weights[cell][0] = (double)(cell + 1);
+		network->layers[1].weights[cell][1] = 1.0;
+	}
+}
+
+static void print_scores(const char *what, const double *scores)
+{
+	printf("%-38s", what);
+
+	for (int cell = 0; cell < CELL_COUNT; cell++)
+		printf("%6g", scores[cell]);
+
+	printf("\n");
+}
+
+static void run_the_experiments(void)
+{
+	network_t network;
+	board_t board;
+	double inputs[CELL_COUNT];
+	double scores[CELL_COUNT];
+
+	board_init(&board);
+	place_mark(&board, CELL_TOP_LEFT, 'X');
+	place_mark(&board, CELL_TOP, 'X');
+	build_the_experiment_network(&network);
+	board_to_inputs(&board, inputs);
+
+	printf("\n%-38s", "");
+	for (int cell = 0; cell < CELL_COUNT; cell++)
+		printf("%6d", cell);
+	printf("\n");
+
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+	print_scores("X at the top left and the top middle", scores);
+
+	network.layers[1].weights[3][0] = 10.0;
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+	print_scores("an output weight of cell 3: 4 to 10", scores);
+	network.layers[1].weights[3][0] = 4.0;
+
+	network.layers[0].weights[0][1] = 3.0;
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+	print_scores("a hidden weight: 1 to 3", scores);
+	network.layers[0].weights[0][1] = 1.0;
+
+	network.layers[1].biases[5] = 3.0;
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+	print_scores("an output bias of cell 5: 0 to 3", scores);
+	network.layers[1].biases[5] = 0.0;
+
+	network.layers[0].biases[0] = 1.0;
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+	print_scores("a hidden bias: 0 to 1", scores);
+	network.layers[0].biases[0] = 0.0;
+
+	board_init(&board);
+	place_mark(&board, CELL_TOP_LEFT, 'X');
+	board_to_inputs(&board, inputs);
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+	print_scores("a board with only X at the top left", scores);
+
+	board_init(&board);
+	place_mark(&board, CELL_TOP_LEFT, 'X');
+	place_mark(&board, CELL_TOP, 'O');
+	board_to_inputs(&board, inputs);
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+	print_scores("a board with X and O on the top row", scores);
+}
+
 int main(int argc, char *argv[], char *env[]) {
 	UNUSED(argc);
 	UNUSED(argv);
@@ -64,6 +151,7 @@ int main(int argc, char *argv[], char *env[]) {
 
 	greet("Hello, World!");
 	score_a_game();
+	run_the_experiments();
 
 	return EXIT_SUCCESS;
 }
