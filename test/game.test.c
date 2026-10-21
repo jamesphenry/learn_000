@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include "test-runner.h"
 #include <stdbool.h>
@@ -95,8 +96,39 @@ static int toy_samples(game_position_t *out, int wanted)
 	return count;
 }
 
+/*
+ * Every position the toy game can reach: the pile gets one smaller each
+ * time, and the turn changes with it, so there are ten of them.
+ */
+static int toy_positions(game_position_t *out, int wanted)
+{
+	int count = 0;
+
+	if (out == NULL || wanted < 1) return 0;
+
+	for (int stones = TOY_STONES; stones >= 0 && count < wanted; stones--) {
+		for (int turn = 0; turn < 2 && count < wanted; turn++) {
+			/* the first player takes the last stone, so an empty
+			 * pile is always left with the second player to move */
+			if (stones == 0 && turn == 0) continue;
+
+			/* and the pile is full before the first move is made */
+			if (stones == TOY_STONES && turn == 1) continue;
+
+			toy_start(&out[count]);
+			toy_of(&out[count])->stones = stones;
+			toy_of(&out[count])->turn = turn;
+			count++;
+		}
+	}
+
+	return count;
+}
+
 static void toy_game(game_t *game)
 {
+	game_init(game);
+
 	game->n_features = 1;
 	game->start = toy_start;
 	game->play = toy_play;
@@ -105,6 +137,7 @@ static void toy_game(game_t *game)
 	game->to_move = toy_to_move;
 	game->outcome = toy_outcome;
 	game->samples = toy_samples;
+	game->positions = toy_positions;
 }
 
 /*
@@ -367,6 +400,43 @@ static char *test_a_perfect_player_that_cannot_have_its_memory(void)
 	return NULL;
 }
 
+static char *test_a_game_can_offer_the_positions_it_can_reach(void)
+{
+	game_t game;
+	game_position_t positions[TOY_STONES * 2];
+	int count;
+
+	toy_game(&game);
+
+	count = game.positions(positions, TOY_STONES * 2);
+
+	_it_should("offer them", count == 10);
+	_it_should("not offer more than were asked for", count <= TOY_STONES * 2);
+	_it_should("start with the whole pile",
+		toy_in(&positions[0])->stones == TOY_STONES);
+	_it_should("end with an empty pile",
+		toy_in(&positions[count - 1])->stones == 0);
+	_it_should("leave the empty pile with the second player to move",
+		toy_in(&positions[count - 1])->turn == 1);
+
+	return NULL;
+}
+
+static char *test_a_game_that_is_emptied_leaves_nothing_behind(void)
+{
+	game_t game;
+
+	memset(&game, 0xff, sizeof(game));
+
+	game_init(&game);
+
+	_it_should("have no features", game.n_features == 0);
+	_it_should("have no way to start a game", game.start == NULL);
+	_it_should("offer no positions", game.positions == NULL);
+
+	return NULL;
+}
+
 static char *run_tests(void)
 {
 	_run_test(test_a_game_is_played_to_the_end);
@@ -379,6 +449,8 @@ static char *run_tests(void)
 	_run_test(test_a_perfect_player_that_needs_no_memory);
 	_run_test(test_a_perfect_player_that_asks_for_memory);
 	_run_test(test_a_perfect_player_that_cannot_have_its_memory);
+	_run_test(test_a_game_can_offer_the_positions_it_can_reach);
+	_run_test(test_a_game_that_is_emptied_leaves_nothing_behind);
 
 	return NULL;
 }

@@ -89,6 +89,16 @@ typedef struct {
 	 * It fills in as many as it can and says how many it gave.
 	 */
 	int (*samples)(game_position_t *out, int wanted);
+
+	/*
+	 * Every position the game can reach, so that two models can be
+	 * measured on the same positions. It fills in as many as it can and
+	 * says how many it gave.
+	 *
+	 * A game that cannot say which positions there are leaves this null,
+	 * and is measured on the positions its models happen to visit.
+	 */
+	int (*positions)(game_position_t *out, int wanted);
 } game_t;
 
 /*
@@ -139,6 +149,10 @@ typedef struct {
  * cannot choose one.
  */
 typedef game_move_t (*game_chooser_t)(void *context, const game_position_t *position);
+
+/* Empties a game, so that a part of it a game does not fill in is empty
+ * rather than whatever was there before. */
+void game_init(game_t *game);
 
 /* Gives the perfect player the memory it needs. */
 bool oracle_start(oracle_t *oracle);

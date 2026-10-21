@@ -148,9 +148,44 @@ static int nim_samples(game_position_t *out, int wanted)
 	return count;
 }
 
+/*
+ * Every position the game can reach: the heaps only ever get smaller, so a
+ * position is reachable when no heap is bigger than the one the game starts
+ * with.
+ *
+ * The heaps belong to no player, so who is to move makes no difference to
+ * what a position is worth, and every position is given with the first
+ * player to move.
+ */
+static int nim_positions(game_position_t *out, int wanted)
+{
+	int count = 0;
+
+	if (out == NULL || wanted < 1) return 0;
+
+	for (int a = 0; a <= NIM_START_HEAP_0 && count < wanted; a++)
+		for (int b = 0; b <= NIM_START_HEAP_1 && count < wanted; b++)
+			for (int c = 0; c <= NIM_START_HEAP_2 && count < wanted; c++) {
+				nim_t *nim = nim_of(&out[count]);
+
+				nim->heaps[0] = a;
+				nim->heaps[1] = b;
+				nim->heaps[2] = c;
+				nim->turn = 0;
+
+				refresh_moves(&out[count]);
+
+				count++;
+			}
+
+	return count;
+}
+
 void nim_game(game_t *game)
 {
 	if (game == NULL) return;
+
+	game_init(game);
 
 	game->n_features = NIM_HEAPS;
 	game->start = nim_start;
@@ -160,6 +195,7 @@ void nim_game(game_t *game)
 	game->to_move = nim_to_move;
 	game->outcome = nim_outcome;
 	game->samples = nim_samples;
+	game->positions = nim_positions;
 }
 
 /*
@@ -168,7 +204,7 @@ void nim_game(game_t *game)
  * other position can be turned into one by taking stones from the right
  * heap.
  */
-static int nim_xor(const nim_t *nim)
+int nim_sum(const nim_t *nim)
 {
 	int value = 0;
 
@@ -184,13 +220,13 @@ static double nim_worth(void *state, const game_position_t *position)
 
 	/* the player to move wins if the exclusive or of the heaps is not
 	 * zero */
-	return nim_xor(nim_state_of(position)) != 0 ? 1.0 : 0.0;
+	return nim_sum(nim_state_of(position)) != 0 ? 1.0 : 0.0;
 }
 
 static game_move_t nim_choose(void *state, const game_position_t *position)
 {
 	const nim_t *nim = nim_state_of(position);
-	int xor = nim_xor(nim);
+	int xor = nim_sum(nim);
 
 	(void)state;
 
@@ -230,7 +266,7 @@ static game_outcome_t nim_oracle_outcome(void *state, const game_position_t *fin
 
 	/* and the player to move has lost it, because the exclusive or of the
 	 * heaps is zero */
-	if (nim_xor(nim) != 0) return GAME_DRAW;
+	if (nim_sum(nim) != 0) return GAME_DRAW;
 
 	if (nim->turn == 0) return GAME_SECOND_WINS;
 

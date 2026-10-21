@@ -218,6 +218,17 @@ static char *test_it_offers_positions_to_look_at(void)
 	return NULL;
 }
 
+/*
+ * The board has too many positions to be listed, so the game says it cannot
+ * list them, and a model is measured on the ones it happens to reach.
+ */
+static char *test_it_cannot_list_the_positions_it_can_reach(void)
+{
+	_it_should("say so", game.positions == NULL);
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	tictactoe_game(&game);
@@ -233,6 +244,7 @@ static char *run_tests()
 	_run_test(test_the_perfect_player_knows_what_a_position_is_worth);
 	_run_test(test_the_perfect_player_agrees_with_the_game);
 	_run_test(test_it_offers_positions_to_look_at);
+	_run_test(test_it_cannot_list_the_positions_it_can_reach);
 
 	return NULL;
 }

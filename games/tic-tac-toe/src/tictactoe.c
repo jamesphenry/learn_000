@@ -118,6 +118,8 @@ void tictactoe_game(game_t *game)
 {
 	if (game == NULL) return;
 
+	game_init(game);
+
 	game->n_features = CELL_COUNT;
 	game->start = tictactoe_start;
 	game->play = tictactoe_play;
@@ -126,6 +128,10 @@ void tictactoe_game(game_t *game)
 	game->to_move = tictactoe_to_move;
 	game->outcome = tictactoe_outcome;
 	game->samples = tictactoe_samples;
+
+	/* the board has too many positions to be listed, so a model is measured
+	 * on the ones it happens to reach */
+	game->positions = NULL;
 }
 
 /*

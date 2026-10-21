@@ -1,6 +1,13 @@
 #include <string.h>
 #include "game.h"
 
+void game_init(game_t *game)
+{
+	if (game == NULL) return;
+
+	memset(game, 0, sizeof(*game));
+}
+
 bool oracle_start(oracle_t *oracle)
 {
 	if (oracle == NULL) return false;

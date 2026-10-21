@@ -370,6 +370,85 @@ static char *test_the_move_is_right_in_every_position(void)
 	return NULL;
 }
 
+static char *test_the_nim_sum_is_the_exclusive_or_of_the_heaps(void)
+{
+	game_position_t position;
+
+	/* the exclusive or of three, four and five is two */
+	position_with(&position, 3, 4, 5, 0);
+
+	_it_should("say two", nim_sum(nim_state_of(&position)) == 2);
+
+	/* and of three, four and seven it is zero */
+	position_with(&position, 3, 4, 7, 0);
+
+	_it_should("say zero", nim_sum(nim_state_of(&position)) == 0);
+
+	/* and of one, two and four it is seven */
+	position_with(&position, 1, 2, 4, 0);
+
+	_it_should("say seven", nim_sum(nim_state_of(&position)) == 7);
+
+	/* and a position with no stones in it has a nim-sum of zero */
+	position_with(&position, 0, 0, 0, 0);
+
+	_it_should("say zero", nim_sum(nim_state_of(&position)) == 0);
+
+	return NULL;
+}
+
+/*
+ * The positions the game can reach: every one of them, no more and no fewer.
+ */
+static char *test_it_offers_every_position_it_can_reach(void)
+{
+	game_position_t positions[NIM_MAX_POSITIONS];
+	int count;
+	int unreachable = 0;
+	int wrong_moves = 0;
+	int found_start = 0;
+	int repeated = 0;
+
+	count = game.positions(positions, NIM_MAX_POSITIONS);
+
+	_it_should("offer every position there is", count == NIM_MAX_POSITIONS);
+	_it_should("not offer more than were asked for", count <= NIM_MAX_POSITIONS);
+
+	for (int i = 0; i < count; i++) {
+		const nim_t *nim = nim_state_of(&positions[i]);
+
+		/* no heap is bigger than the one the game starts with */
+		if (nim->heaps[0] > NIM_START_HEAP_0 ||
+		    nim->heaps[1] > NIM_START_HEAP_1 ||
+		    nim->heaps[2] > NIM_START_HEAP_2) unreachable++;
+
+		/* and it offers one move for every stone there is */
+		if (positions[i].n_moves != nim->heaps[0] + nim->heaps[1] + nim->heaps[2])
+			wrong_moves++;
+
+		/* the position the game starts in is one of them */
+		if (nim->heaps[0] == NIM_START_HEAP_0 &&
+		    nim->heaps[1] == NIM_START_HEAP_1 &&
+		    nim->heaps[2] == NIM_START_HEAP_2) found_start++;
+
+		/* and no position is offered twice */
+		for (int j = i + 1; j < count; j++) {
+			const nim_t *other = nim_state_of(&positions[j]);
+
+			if (nim->heaps[0] == other->heaps[0] &&
+			    nim->heaps[1] == other->heaps[1] &&
+			    nim->heaps[2] == other->heaps[2]) repeated++;
+		}
+	}
+
+	_it_should("offer no position that cannot be reached", unreachable == 0);
+	_it_should("offer the moves of every position", wrong_moves == 0);
+	_it_should("offer the position the game starts in", found_start == 1);
+	_it_should("offer no position twice", repeated == 0);
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	nim_game(&game);
@@ -380,6 +459,8 @@ static char *run_tests()
 	_run_test(test_it_refuses_an_illegal_move);
 	_run_test(test_the_game_ends_when_there_are_no_stones_left);
 	_run_test(test_the_features_are_the_sizes_of_the_heaps_as_a_fraction);
+	_run_test(test_the_nim_sum_is_the_exclusive_or_of_the_heaps);
+	_run_test(test_it_offers_every_position_it_can_reach);
 	_run_test(test_the_perfect_player_knows_what_a_position_is_worth);
 	_run_test(test_the_perfect_player_leaves_a_position_that_is_worth_nothing);
 	_run_test(test_the_perfect_player_plays_on_when_it_cannot_win);

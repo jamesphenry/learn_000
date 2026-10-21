@@ -13,6 +13,10 @@
 #define NIM_START_HEAP_1 4
 #define NIM_START_HEAP_2 5
 
+/* How many positions the game can reach: the heaps only ever get smaller. */
+#define NIM_MAX_POSITIONS ((NIM_START_HEAP_0 + 1) * (NIM_START_HEAP_1 + 1) * \
+			    (NIM_START_HEAP_2 + 1))
+
 /*
  * A move takes stones from one heap: it says which heap, and how many
  * stones to take from it.
@@ -34,6 +38,13 @@ const nim_t *nim_state_of(const game_position_t *position);
 /* The heap a move is from, and how many stones it takes from it. */
 int nim_heap_of(game_move_t move);
 int nim_count_of(game_move_t move);
+
+/*
+ * The nim-sum of a position: the exclusive or of the heaps. It is zero when
+ * the position is a loss for the player to move, and not zero when it is a
+ * win.
+ */
+int nim_sum(const nim_t *nim);
 
 /*
  * The game of Nim, as the framework sees it.
