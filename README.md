@@ -84,12 +84,14 @@ learn_000
 │   ├── board.h
 │   ├── layer.h
 │   ├── main.h
+│   ├── network.h
 │   ├── neuron.h
 │   └── ...
 ├── src
 │   ├── board.c
 │   ├── layer.c
 │   ├── main.c
+│   ├── network.c
 │   ├── neuron.c
 │   └── ...
 ├── test

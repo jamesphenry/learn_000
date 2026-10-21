@@ -84,7 +84,7 @@ run-debug: $(DEBUG_TARGET) ## Build and run debug target
 # The runner exits successfully even when a test fails or crashes, so its
 # output is checked as well before the build is called a success.
 test: ## Run tests
-	@out="$$(CFLAGS="$(CFLAGS) -g -Og -I. -DTEST -pthread" sh test/test-runner/test-runner.sh $(TST) 2>&1)"; rc=$$?; \
+	@if out="$$(CFLAGS="$(CFLAGS) -g -Og -I. -DTEST -pthread" sh test/test-runner/test-runner.sh $(TST) 2>&1)"; then rc=0; else rc=$$?; fi; \
 	echo "$$out"; \
 	if [ $$rc -ne 0 ] || echo "$$out" | grep -qE '\*\*FAIL\*\*|Segmentation fault|SIGSEGV|core dumped'; then \
 		echo "tests failed"; \
