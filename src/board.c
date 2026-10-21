@@ -50,6 +50,12 @@ void print_board(const board_t *board)
 	}
 }
 
+void board_to_inputs(const board_t *board, double out[CELL_COUNT])
+{
+	for (int cell = 0; cell < CELL_COUNT; cell++)
+		out[cell] = (double)board->cells[cell];
+}
+
 bool place_mark(board_t *board, board_cell_t cell, char player_mark)
 {
 	if (cell < 0 || cell >= CELL_COUNT) return false;

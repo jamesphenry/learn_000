@@ -47,6 +47,7 @@ int cell_col(board_cell_t cell);
 cell_value_t encode_mark(char player_mark);
 char decode_value(cell_value_t value);
 void print_board(const board_t *board);
+void board_to_inputs(const board_t *board, double out[CELL_COUNT]);
 bool place_mark(board_t *board, board_cell_t cell, char player_mark);
 bool detect_win(const board_t *board, char player_mark);
 bool detect_current_win(const board_t *board);

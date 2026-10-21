@@ -431,6 +431,88 @@ static char *test_network_forward_with_a_changed_layer_count(void)
 	return NULL;
 }
 
+/* A game in progress: X at the top left, O in the middle, X at the top
+ * right, O at the bottom left, X at the bottom right. X to move. */
+static char *test_a_real_board_gives_nine_scores(void)
+{
+	network_t network;
+	board_t board;
+	double inputs[CELL_COUNT];
+	double scores[CELL_COUNT];
+
+	board_init(&board);
+	place_mark(&board, CELL_TOP_LEFT, 'X');
+	place_mark(&board, CELL_CENTER, 'O');
+	place_mark(&board, CELL_TOP_RIGHT, 'X');
+	place_mark(&board, CELL_BOTTOM_LEFT, 'O');
+	place_mark(&board, CELL_BOTTOM_RIGHT, 'X');
+
+	/* hidden: one neuron for the top left and the middle, one for the
+	 * bottom right */
+	network_init(&network);
+	network_add_layer(&network, CELL_COUNT, 2);
+	network.layers[0].weights[0][0] = 1.0;
+	network.layers[0].weights[0][4] = 1.0;
+	network.layers[0].weights[1][8] = 1.0;
+
+	/* out: one neuron per cell, each reading both hidden values */
+	network_add_layer(&network, 2, CELL_COUNT);
+	for (int cell = 0; cell < CELL_COUNT; cell++) {
+		network.layers[1].weights[cell][0] = 1.0;
+		network.layers[1].weights[cell][1] = (double)(cell + 1);
+	}
+
+	board_to_inputs(&board, inputs);
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+
+	/* hidden: (1 + -1) = 0 and 1, out: 1 * 0 + (cell + 1) * 1 */
+	_it_should("score the first cell 1", nearly_equal(scores[0], 1.0));
+	_it_should("score the middle cell 5", nearly_equal(scores[4], 5.0));
+	_it_should("score the last cell 9", nearly_equal(scores[8], 9.0));
+
+	int all_right = 1;
+	for (int cell = 0; cell < CELL_COUNT; cell++) {
+		if (!nearly_equal(scores[cell], (double)(cell + 1)))
+			all_right = 0;
+	}
+	_it_should("score every cell in turn", all_right);
+
+	return NULL;
+}
+
+static char *test_an_empty_board_gives_no_scores(void)
+{
+	network_t network;
+	board_t board;
+	double inputs[CELL_COUNT];
+	double scores[CELL_COUNT];
+
+	board_init(&board);
+
+	network_init(&network);
+	network_add_layer(&network, CELL_COUNT, 2);
+	network.layers[0].weights[0][0] = 1.0;
+	network.layers[0].weights[0][4] = 1.0;
+	network.layers[0].weights[1][8] = 1.0;
+	network_add_layer(&network, 2, CELL_COUNT);
+	for (int cell = 0; cell < CELL_COUNT; cell++) {
+		network.layers[1].weights[cell][0] = 1.0;
+		network.layers[1].weights[cell][1] = (double)(cell + 1);
+	}
+
+	board_to_inputs(&board, inputs);
+	network_forward(&network, inputs, CELL_COUNT, scores, CELL_COUNT);
+
+	int all_zero = 1;
+	for (int cell = 0; cell < CELL_COUNT; cell++) {
+		if (scores[cell] != 0.0)
+			all_zero = 0;
+	}
+	_it_should("score every cell zero", all_zero);
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	_run_test(test_two_layers_compose);
@@ -445,6 +527,8 @@ static char *run_tests()
 	_run_test(test_network_forward_clamps_at_each_layer);
 	_run_test(test_network_forward_with_one_layer);
 	_run_test(test_the_board_feeds_a_network);
+	_run_test(test_a_real_board_gives_nine_scores);
+	_run_test(test_an_empty_board_gives_no_scores);
 	_run_test(test_network_forward_null_arguments);
 	_run_test(test_network_forward_uninitialised_network);
 	_run_test(test_network_forward_with_a_broken_join);

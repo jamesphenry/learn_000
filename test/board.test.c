@@ -326,6 +326,28 @@ static char *test_boards_are_independent(void)
 	return NULL;
 }
 
+static char *test_board_to_inputs(void)
+{
+	board_t board;
+	double inputs[CELL_COUNT];
+
+	board_init(&board);
+	board_to_inputs(&board, inputs);
+
+	_it_should("give an empty cell as zero", inputs[CELL_CENTER] == 0.0);
+
+	place_mark(&board, CELL_TOP_LEFT, 'X');
+	place_mark(&board, CELL_CENTER, 'O');
+	board_to_inputs(&board, inputs);
+
+	_it_should("give an X as 1", inputs[CELL_TOP_LEFT] == 1.0);
+	_it_should("give an O as -1", inputs[CELL_CENTER] == -1.0);
+	_it_should("give an empty cell as zero", inputs[CELL_BOTTOM] == 0.0);
+	_it_should("leave the other cells alone", inputs[CELL_BOTTOM_RIGHT] == 0.0);
+
+	return NULL;
+}
+
 static char *run_tests()
 {
 	_run_test(test_cell_encodings);
@@ -341,6 +363,7 @@ static char *run_tests()
 	_run_test(test_board_is_full);
 	_run_test(test_detect_draw);
 	_run_test(test_boards_are_independent);
+	_run_test(test_board_to_inputs);
 
 	return NULL;
 }
