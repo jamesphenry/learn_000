@@ -4,16 +4,6 @@
 #include "judge.h"
 #include "policy.h"
 
-/* The move the perfect player would play. */
-static game_move_t oracle_choose(void *context, const game_position_t *position)
-{
-	const oracle_t *oracle = (const oracle_t *)context;
-
-	if (oracle == NULL || oracle->choose == NULL || !oracle_ready(oracle)) return -1;
-
-	return oracle->choose(oracle->state, position);
-}
-
 bool evaluate_against(const game_t *game, const oracle_t *oracle,
                       const network_t *first, const network_t *second,
                       unsigned long long seed, int games, double temperature,

@@ -150,6 +150,12 @@ typedef struct {
  */
 typedef game_move_t (*game_chooser_t)(void *context, const game_position_t *position);
 
+/*
+ * The callback the framework plays a game with, when one of the sides is the
+ * perfect player. The context is the perfect player.
+ */
+game_move_t oracle_choose(void *context, const game_position_t *position);
+
 /* Empties a game, so that a part of it a game does not fill in is empty
  * rather than whatever was there before. */
 void game_init(game_t *game);

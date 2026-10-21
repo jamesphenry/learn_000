@@ -8,6 +8,16 @@ void game_init(game_t *game)
 	memset(game, 0, sizeof(*game));
 }
 
+game_move_t oracle_choose(void *context, const game_position_t *position)
+{
+	const oracle_t *oracle = (const oracle_t *)context;
+
+	if (oracle == NULL || oracle->choose == NULL || position == NULL) return -1;
+	if (!oracle_ready(oracle)) return -1;
+
+	return oracle->choose(oracle->state, position);
+}
+
 bool oracle_start(oracle_t *oracle)
 {
 	if (oracle == NULL) return false;

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "main.h"
+#include "analysis.h"
 #include "arena.h"
 #include "board.h"
 #include "evaluate.h"
@@ -582,6 +583,127 @@ static void run_the_league(const game_t *game, const oracle_t *oracle,
 	if (table) print_the_league_table(&league);
 }
 
+/*
+ * The heaps of a position, as they are written in a table.
+ */
+static void heaps_in_a_row(const nim_t *nim, char *out, size_t size)
+{
+	snprintf(out, size, "%d, %d, %d", nim->heaps[0], nim->heaps[1], nim->heaps[2]);
+}
+
+/* The name of a heap. */
+static const char *name_of_a_heap(int heap)
+{
+	static const char *names[NIM_HEAPS] = { "the first", "the second", "the third" };
+
+	if (heap < 0 || heap >= NIM_HEAPS) return "a heap that is not there";
+
+	return names[heap];
+}
+
+/*
+ * One game, move by move: what the model saw, what it played, and what it
+ * left behind. The model takes one side and the perfect player the other.
+ */
+static void trace_a_game(const game_t *game, const oracle_t *oracle,
+                         network_t *network)
+{
+	game_trace_t played;
+	game_position_t positions[GAME_MAX_HISTORY];
+	game_position_t final;
+	policy_t policy;
+	int steps;
+
+	policy_init(&policy, game, network, 1, 0.0);
+
+	game_play(game, policy_choose, &policy, oracle_choose, (void *)oracle, &played);
+
+	steps = game_replay(game, &played, positions, &final);
+
+	printf("\n  a game against the perfect player\n");
+	printf("  %-5s %-12s %8s %-8s %-26s %8s %9s %9s\n",
+	       "move", "the heaps", "nim-sum", "who", "what was played", "nim-sum",
+	       "the worth", "it left");
+
+	for (int step = 0; step < steps; step++) {
+		const game_position_t *after = (step + 1 < steps) ?
+			&positions[step + 1] : &final;
+		const nim_t *before = nim_state_of(&positions[step]);
+		game_move_t move = played.offered[step];
+		int turn = game->to_move(&positions[step]);
+		char heaps[32];
+		char what[64];
+
+		heaps_in_a_row(before, heaps, sizeof(heaps));
+		snprintf(what, sizeof(what), "take %d from %s heap",
+		         nim_count_of(move), name_of_a_heap(nim_heap_of(move)));
+
+		printf("  %-5d %-12s %8d %-8s %-26s %8d %9.3f %9.3f\n",
+		       step + 1, heaps, nim_sum(before),
+		       turn == 0 ? "model" : "perfect", what,
+		       nim_sum(nim_state_of(after)),
+		       oracle->worth(oracle->state, &positions[step]),
+		       oracle->worth(oracle->state, after));
+	}
+
+	printf("\n  the game %s\n",
+	       game->outcome(&played.position) == GAME_FIRST_WINS ? "went to the first player" :
+	       game->outcome(&played.position) == GAME_SECOND_WINS ? "went to the second player" :
+	       "was drawn");
+}
+
+/*
+ * The investigation of the model of Nim: what has it actually learned?
+ *
+ * The first part maps a game out move by move, so that the failure can be
+ * seen. The second measures the model over every position the game can
+ * reach, which is the same ground for every model, so that two models are
+ * compared on the same positions.
+ */
+static void run_the_nim_investigation(const game_t *game, const oracle_t *oracle)
+{
+	arena_settings_t settings;
+	network_t network;
+	rng_t rng;
+	analysis_t measured;
+
+	arena_settings_init(&settings);
+
+	rng_seed(&rng, settings.training_seed);
+
+	printf("\nwhat the model of Nim has learned\n");
+	printf("  %d games of training, taught by the perfect player\n",
+	       settings.training_games);
+
+	if (!arena_train(&settings, game, oracle, INIT_RANDOM, &rng, &network, NULL)) {
+		printf("  the model could not be taught\n");
+		return;
+	}
+
+	trace_a_game(game, oracle, &network);
+
+	if (!analysis_fixed_set(game, oracle, &network, settings.evaluation_seed,
+	                        &measured)) {
+		printf("\n  the game cannot say which positions there are\n");
+		return;
+	}
+
+	printf("\n  over the %d positions the game can reach\n", measured.positions);
+	printf("    out by the truth              %7.3f\n", measured.truth_error);
+	printf("    it says, on average            %7.3f, and the truth is %7.3f\n",
+	       measured.mean_worth, measured.mean_truth);
+	printf("    for the positions it wins      %7.3f, and for the ones it loses %7.3f\n",
+	       measured.win_worth, measured.loss_worth);
+	printf("    it calls a win                 %d of them, and %d of them are wins\n",
+	       measured.calls_win, measured.truth_wins);
+	printf("    it plays the best move         %d of %d\n",
+	       measured.best_moves, measured.moves);
+	printf("    it leaves the opponent lost    %d of the %d it can win\n",
+	       measured.winning_moves, measured.winning_positions);
+	printf("    it gives away                  %7.3f a move\n",
+	       measured.moves > 0 ? measured.value_lost / measured.moves : 0.0);
+}
+
 int main(int argc, char *argv[], char *env[]) {
 	game_t game;
 	oracle_t oracle;
@@ -658,6 +780,9 @@ int main(int argc, char *argv[], char *env[]) {
 
 	printf("\n");
 	run_the_league(&game, &oracle, "Nim", models, table);
+
+	printf("\n");
+	run_the_nim_investigation(&game, &oracle);
 
 	oracle_stop(&oracle);
 
