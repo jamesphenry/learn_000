@@ -167,13 +167,26 @@ static char *test_detect_win_no_win(void)
 
 static char *test_detect_win_every_line(void)
 {
+	/* the eight lines of the board, written out here rather than taken
+	 * from the board module, so that the test does not simply believe
+	 * whatever the board module happens to think a line is */
+	static const board_cell_t lines[8][3] = {
+		{CELL_TOP_LEFT, CELL_TOP, CELL_TOP_RIGHT},
+		{CELL_MIDDLE_LEFT, CELL_CENTER, CELL_MIDDLE_RIGHT},
+		{CELL_BOTTOM_LEFT, CELL_BOTTOM, CELL_BOTTOM_RIGHT},
+		{CELL_TOP_LEFT, CELL_MIDDLE_LEFT, CELL_BOTTOM_LEFT},
+		{CELL_TOP, CELL_CENTER, CELL_BOTTOM},
+		{CELL_TOP_RIGHT, CELL_MIDDLE_RIGHT, CELL_BOTTOM_RIGHT},
+		{CELL_TOP_LEFT, CELL_CENTER, CELL_BOTTOM_RIGHT},
+		{CELL_TOP_RIGHT, CELL_CENTER, CELL_BOTTOM_LEFT}
+	};
 	static char message[64];
 	board_t board;
 
 	for (int line = 0; line < 8; line++) {
 		board_init(&board);
 		for (int i = 0; i < 3; i++)
-			place_mark(&board, win_lines[line][i], 'X');
+			place_mark(&board, lines[line][i], 'X');
 
 		snprintf(message, sizeof(message), "detect a win on line %d", line);
 		_it_should(message, detect_win(&board, 'X'));
