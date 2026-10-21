@@ -107,7 +107,7 @@ bool trainer_learn_from_oracle(trainer_t *trainer, const game_t *game,
 
 	if (trainer == NULL || game == NULL || oracle == NULL || trace == NULL) return false;
 	if (trainer->network == NULL) return false;
-	if (oracle->worth == NULL || oracle->state == NULL) return false;
+	if (oracle->worth == NULL || !oracle_ready(oracle)) return false;
 
 	/* the game is played again from the start, so that every position is
 	 * seen as it was when the move was made */

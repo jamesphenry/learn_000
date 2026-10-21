@@ -151,6 +151,49 @@ static char *test_the_two_reckonings_agree_on_a_diagonal(void)
 	return NULL;
 }
 
+/*
+ * A perfect player with no memory of its own, which gets the result of the
+ * game wrong on purpose, so that the referee has something to find.
+ */
+static game_outcome_t wrong_outcome(void *state, const game_position_t *final)
+{
+	(void)state;
+
+	if (game.outcome(final) == GAME_FIRST_WINS) return GAME_SECOND_WINS;
+
+	return GAME_FIRST_WINS;
+}
+
+static void stateless_wrong_oracle(oracle_t *oracle)
+{
+	oracle->state = NULL;
+	oracle->worth = NULL;
+	oracle->choose = NULL;
+	oracle->outcome = wrong_outcome;
+	oracle->make_state = NULL;
+	oracle->free_state = NULL;
+}
+
+static char *test_the_referee_finds_a_wrong_result(void)
+{
+	oracle_t wrong;
+	game_trace_t trace;
+	judgement_t verdict;
+	const game_move_t moves[] = {
+		CELL_TOP_LEFT, CELL_CENTER, CELL_TOP, CELL_MIDDLE_LEFT, CELL_TOP_RIGHT
+	};
+
+	stateless_wrong_oracle(&wrong);
+
+	make_trace(&trace, moves, 5);
+
+	_it_should("be judged bad", !judge_game(&game, &wrong, &trace, &verdict));
+	_it_should("find the wrong result", verdict.result_wrong == 1);
+	_it_should("not mind the moves", verdict.unexpected == 0);
+
+	return NULL;
+}
+
 static char *test_a_move_is_checked_against_the_game(void)
 {
 	game_position_t position;
@@ -181,6 +224,7 @@ static char *run_tests()
 	_run_test(test_a_move_off_the_board_is_found);
 	_run_test(test_the_two_reckonings_agree);
 	_run_test(test_the_two_reckonings_agree_on_a_diagonal);
+	_run_test(test_the_referee_finds_a_wrong_result);
 	_run_test(test_a_move_is_checked_against_the_game);
 
 	oracle_stop(&oracle);

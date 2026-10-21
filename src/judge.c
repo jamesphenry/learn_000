@@ -29,7 +29,7 @@ bool judge_game(const game_t *game, const oracle_t *oracle, const game_trace_t *
 
 	/* the result is worked out by the perfect player as well, and the two
 	 * are compared */
-	if (oracle->outcome != NULL && oracle->state != NULL) {
+	if (oracle->outcome != NULL && oracle_ready(oracle)) {
 		if (oracle->outcome(oracle->state, &trace->position) !=
 		    game->outcome(&trace->position))
 			verdict->result_wrong++;

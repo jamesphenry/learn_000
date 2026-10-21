@@ -4,11 +4,28 @@
 bool oracle_start(oracle_t *oracle)
 {
 	if (oracle == NULL) return false;
-	if (oracle->make_state == NULL) return false;
+
+	/* a perfect player that needs no memory of its own says so by leaving
+	 * make_state alone, and is then asked with a null state */
+	if (oracle->make_state == NULL) {
+		oracle->state = NULL;
+
+		return true;
+	}
 
 	oracle->state = oracle->make_state();
 
 	return oracle->state != NULL;
+}
+
+bool oracle_ready(const oracle_t *oracle)
+{
+	if (oracle == NULL) return false;
+
+	/* the perfect player was started, or it needs no memory of its own */
+	if (oracle->make_state != NULL && oracle->state == NULL) return false;
+
+	return true;
 }
 
 void oracle_stop(oracle_t *oracle)

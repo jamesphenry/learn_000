@@ -137,22 +137,32 @@ static game_outcome_t toy_oracle_outcome(void *state, const game_position_t *fin
 
 static void *toy_make_state(void)
 {
-	return NULL;
+	return malloc(sizeof(int));
 }
 
 static void toy_free_state(void *state)
 {
-	(void)state;
+	free(state);
 }
 
+/* A perfect player that asks for memory of its own and cannot have it. */
+static void *toy_make_state_that_fails(void)
+{
+	return NULL;
+}
+
+/*
+ * The perfect player for the toy game. It needs no memory of its own: it
+ * works the answer out from the pile of stones every time.
+ */
 static void toy_oracle(oracle_t *oracle)
 {
 	oracle->state = NULL;
 	oracle->worth = toy_worth;
 	oracle->choose = toy_choose;
 	oracle->outcome = toy_oracle_outcome;
-	oracle->make_state = toy_make_state;
-	oracle->free_state = toy_free_state;
+	oracle->make_state = NULL;
+	oracle->free_state = NULL;
 }
 
 /* The chooser the tests use: it always takes the only move there is. */
@@ -308,7 +318,56 @@ static char *test_the_perfect_player_knows_the_game(void)
 	return NULL;
 }
 
-static char *run_tests()
+static char *test_a_perfect_player_that_needs_no_memory(void)
+{
+	oracle_t oracle;
+
+	toy_oracle(&oracle);
+
+	_it_should("be ready without any memory of its own", oracle_ready(&oracle));
+	_it_should("be started without any memory of its own", oracle_start(&oracle));
+	_it_should("still be ready", oracle_ready(&oracle));
+	_it_should("have no memory of its own", oracle.state == NULL);
+
+	oracle_stop(&oracle);
+
+	return NULL;
+}
+
+static char *test_a_perfect_player_that_asks_for_memory(void)
+{
+	oracle_t oracle;
+
+	toy_oracle(&oracle);
+	oracle.make_state = toy_make_state;
+	oracle.free_state = toy_free_state;
+
+	_it_should("not be ready before it is started", !oracle_ready(&oracle));
+	_it_should("be started", oracle_start(&oracle));
+	_it_should("be ready once it is started", oracle_ready(&oracle));
+	_it_should("have the memory it asked for", oracle.state != NULL);
+
+	oracle_stop(&oracle);
+
+	_it_should("have given the memory back", oracle.state == NULL);
+
+	return NULL;
+}
+
+static char *test_a_perfect_player_that_cannot_have_its_memory(void)
+{
+	oracle_t oracle;
+
+	toy_oracle(&oracle);
+	oracle.make_state = toy_make_state_that_fails;
+
+	_it_should("not be started", !oracle_start(&oracle));
+	_it_should("not be ready", !oracle_ready(&oracle));
+
+	return NULL;
+}
+
+static char *run_tests(void)
 {
 	_run_test(test_a_game_is_played_to_the_end);
 	_run_test(test_the_turn_goes_back_and_forth);
@@ -317,6 +376,9 @@ static char *run_tests()
 	_run_test(test_a_move_that_is_not_allowed_is_refused);
 	_run_test(test_the_worth_of_a_result);
 	_run_test(test_the_perfect_player_knows_the_game);
+	_run_test(test_a_perfect_player_that_needs_no_memory);
+	_run_test(test_a_perfect_player_that_asks_for_memory);
+	_run_test(test_a_perfect_player_that_cannot_have_its_memory);
 
 	return NULL;
 }

@@ -98,6 +98,9 @@ typedef struct {
  * The perfect player may need room of its own to remember what it has worked
  * out, so it is given some by oracle_start and gives it back at
  * oracle_stop. The state belongs to whoever holds the oracle.
+ *
+ * A perfect player that needs no memory of its own leaves make_state null,
+ * and is then asked with a null state.
  */
 typedef struct {
 	/* the perfect player's own memory */
@@ -142,6 +145,12 @@ bool oracle_start(oracle_t *oracle);
 
 /* Takes the memory back again. */
 void oracle_stop(oracle_t *oracle);
+
+/*
+ * True when the perfect player can be asked questions: it needs no memory of
+ * its own, or it has been given some.
+ */
+bool oracle_ready(const oracle_t *oracle);
 
 /*
  * Plays a game, asking each side for its moves in turn, and records every

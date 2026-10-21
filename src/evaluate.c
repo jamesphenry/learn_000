@@ -9,7 +9,7 @@ static game_move_t oracle_choose(void *context, const game_position_t *position)
 {
 	const oracle_t *oracle = (const oracle_t *)context;
 
-	if (oracle == NULL || oracle->choose == NULL || oracle->state == NULL) return -1;
+	if (oracle == NULL || oracle->choose == NULL || !oracle_ready(oracle)) return -1;
 
 	return oracle->choose(oracle->state, position);
 }
@@ -94,6 +94,7 @@ bool evaluate_skill(const game_t *game, const oracle_t *oracle,
 
 	if (game == NULL || oracle == NULL || network == NULL) return false;
 	if (result == NULL || games < 1) return false;
+	if (!oracle_ready(oracle)) return false;
 
 	/* the caller may hand over a result that has been used before */
 	memset(result, 0, sizeof(*result));
@@ -157,6 +158,7 @@ bool evaluate_against_perfect(const game_t *game, const oracle_t *oracle,
 
 	if (game == NULL || oracle == NULL || network == NULL) return false;
 	if (result == NULL || games < 1) return false;
+	if (!oracle_ready(oracle)) return false;
 
 	/* the caller may hand over a result that has been used before */
 	memset(result, 0, sizeof(*result));
@@ -286,6 +288,7 @@ bool evaluate_network(const game_t *game, const oracle_t *oracle,
 
 	if (game == NULL || oracle == NULL || network == NULL) return false;
 	if (result == NULL || games < 1) return false;
+	if (!oracle_ready(oracle)) return false;
 
 	/* the caller may hand over a result that has been used before */
 	memset(result, 0, sizeof(*result));
