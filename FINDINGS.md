@@ -352,8 +352,10 @@ visits. With enough games it covers the game well enough to play it
 perfectly against a perfect opponent, but it is still worse than a random
 player in the positions it has not seen.
 
-**A league for the second game.** The league of a hundred models has been
-run for tic-tac-toe, and it produces three rankings that do not agree. The
-same league for Nim has not been run, and the question it would answer is
-whether the disagreement is a fact about the games or a fact about
-tic-tac-toe.
+**A league for the second game.** Done, and it is written up in
+[LEAGUE.md](LEAGUE.md): the same hundred models in the game of Nim move
+sixteen places on average between the training measure and the league, and
+the training measure still cannot separate the models that were taught from
+the ones that were not. What is different in Nim is the league, which does
+tell the two kinds apart — because a game of Nim is never drawn, so a
+hundred models cannot hide behind a hundred thousand draws.

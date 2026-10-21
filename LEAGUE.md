@@ -171,3 +171,54 @@ against a variety of strangers; the controlled test says whether it can do
 it against one unfamiliar opponent of a kind it has never met. Only one of
 the three is a measurement of the model, and it is not the one that is
 easiest to take.
+
+## The same league, in the game of Nim
+
+The same hundred models, the same seeds, the same twenty thousand games of
+training each and the same two hundred games a match — played in the game of
+Nim. The demonstration builds both leagues:
+
+```sh
+./src/learn_000 100
+```
+
+```
+the average model moves 16.4 places when the league decides instead of the training
+
+the leader of each ranking
+  ranking        seed   taught   training     league
+  training          1    truth      0.000      43095
+  league           41    truth      0.000      45429
+  general           3    truth      0.000      45363
+
+the champion is model 40, with the seed 41, taught by the perfect player
+  15143 won, 0 drawn, 4657 lost, 45429 points
+  place by training: 21, by league: 1, by generalisation: 10, of 100
+```
+
+**The training measure still cannot rank the models it ought to.** Forty-three
+of the fifty models taught by the perfect player give away nothing at all in
+their own games, and their training measure is exactly zero, all forty-three
+of them. Not one of the fifty self-taught models is tied at zero.
+
+**The league still reorders them.** The average model moves sixteen places
+between the training measure and the league, and the champion was
+twenty-first by the measure that says how well a model learned.
+
+**But in Nim the league does tell the two kinds apart.** The truth-taught
+models took places 1 to 50 and the self-taught ones 51 to 100, and the
+champion is one of the models that was taught. In tic-tac-toe the league
+told them apart not at all: the truth-taught models took places 2 to 69 and
+the self-taught ones 1 to 100.
+
+The reason is in the games themselves. In tic-tac-toe the models draw with
+one another most of the time — the champion drew 17,609 of its 19,800 games
+— so the league's points are mostly draws, and a hundred models that draw
+with one another cannot be told apart. A game of Nim is never drawn: the
+champion won 15,143 of its 19,800 games and lost the other 4,657, and every
+game in the league had a winner.
+
+So the disagreement between the three rankings is not only a fact about the
+measurements. A model that only practises against one thing learns that one
+thing; and a league of models that cannot beat one another cannot tell them
+apart either.

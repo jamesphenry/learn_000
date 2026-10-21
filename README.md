@@ -148,6 +148,11 @@ the league and every model is measured against them, so the comparison is
 the same for everybody. It agrees with the training measure and disagrees
 with the league — the league's champion is seventy-eighth on it.
 
+The same league is played in the game of Nim, and there the league *does*
+tell the two kinds of model apart: in tic-tac-toe the models draw with one
+another so often that a hundred of them cannot be told apart, and in Nim
+no game is ever drawn.
+
 ## Two models and nobody to tell them the answers
 
 The arena above is taught by the perfect player. The duel is not: two
