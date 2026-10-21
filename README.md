@@ -235,6 +235,7 @@ learn_000
 ├── docs
 │   ├── FINDINGS.md
 │   ├── LEAGUE.md
+│   ├── PLAN.md
 │   ├── RESULTS.md
 │   └── notes.md
 ├── CHANGELOG.md
@@ -246,9 +247,9 @@ learn_000
 `docs/` holds the documentation: what was found and what it means
 ([FINDINGS.md](docs/FINDINGS.md)), the league of a hundred models
 ([LEAGUE.md](docs/LEAGUE.md)), a log of the measurements with the date each
-was taken ([RESULTS.md](docs/RESULTS.md)), and the thinking behind the
-project, including the questions this was built to answer
-([notes.md](docs/notes.md)).
+was taken ([RESULTS.md](docs/RESULTS.md)), the plan of record for the work
+ahead ([PLAN.md](docs/PLAN.md)), and the thinking behind the project,
+including the questions this was built to answer ([notes.md](docs/notes.md)).
 
 ## Licence
 

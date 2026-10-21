@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+  - Added `docs/PLAN.md`, the plan of record for the work ahead.
   - Added the game of Nim, in `games/nim/`, with its own tests.
   - Added a league of a hundred models in the game of Nim, which is written
     up in `docs/LEAGUE.md`.
