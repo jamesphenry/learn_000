@@ -48,14 +48,19 @@ eval $STAT "$0" 1>/dev/null 2>/dev/null || STAT="stat -f '%m %N'"
 # Sort by Modified date
 TESTS=$(eval $STAT $TESTS | sort -t ' ' -nk1 | cut -d ' ' -f2-)
 
+# The test programs are built in a directory of their own, so that two runs
+# of the tests at the same time do not build over one another.
+BUILD_DIR=".test-binaries-$$"
+mkdir -p "$BUILD_DIR"
+
 failed=0
 
 for test in $TESTS
 do
 	echo "${test}"
-	out="$(basename ${test}.out)"
+	out="$BUILD_DIR/$(basename ${test}.out)"
 	if $CC $CFLAGS $SOURCES "${test}" -o "${out}"; then
-		if ! $RUNNER "./${out}"; then
+		if ! $RUNNER "${out}"; then
 			echo "FAILED: ${test}"
 			failed=1
 		fi
@@ -65,5 +70,7 @@ do
 	fi
 	[ -x ] && rm "${out}"
 done
+
+rm -rf "$BUILD_DIR"
 
 exit $failed
